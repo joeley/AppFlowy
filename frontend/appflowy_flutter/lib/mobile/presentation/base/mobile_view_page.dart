@@ -32,6 +32,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+/*
+ * 移动端视图页面基类
+ * 
+ * 所有移动端视图（文档、表格、看板等）的统一底层容器
+ * 提供通用功能：
+ * 1. 状态管理（BLoC注入）
+ * 2. 导航栏控制
+ * 3. 主题适配
+ * 4. 滚动监听
+ * 5. 权限控制
+ */
+
 class MobileViewPage extends StatefulWidget {
   const MobileViewPage({
     super.key,
@@ -46,17 +58,24 @@ class MobileViewPage extends StatefulWidget {
     this.tabs = const [PickerTabType.emoji, PickerTabType.icon],
   });
 
-  /// view id
+  /* 视图ID，唯一标识 */
   final String id;
+  /* 视图布局类型（文档、表格、看板等） */
   final ViewLayoutPB viewLayout;
+  /* 可选标题 */
   final String? title;
+  /* 额外参数，用于传递特定配置 */
   final Map<String, dynamic>? arguments;
+  /* 是否显示更多按钮 */
   final bool showMoreButton;
+  /* 文档块ID，用于定位 */
   final String? blockId;
+  /* 主体顶部内边距 */
   final double bodyPaddingTop;
+  /* 图标选择器标签页 */
   final List<PickerTabType> tabs;
 
-  // only used in row page
+  /* 固定标题（仅用于行页面） */
   final String? fixedTitle;
 
   @override
@@ -64,16 +83,19 @@ class MobileViewPage extends StatefulWidget {
 }
 
 class _MobileViewPageState extends State<MobileViewPage> {
-  // used to determine if the user has scrolled down and show the app bar in immersive mode
+  /* 滚动通知观察者
+   * 用于判断用户滚动方向，在沉浸模式下控制应用栏显示 */
   ScrollNotificationObserverState? _scrollNotificationObserver;
 
-  // control the app bar opacity when in immersive mode
+  /* 应用栏透明度控制器
+   * 沉浸模式下根据滚动位置调整透明度 */
   final ValueNotifier<double> _appBarOpacity = ValueNotifier(1.0);
 
   @override
   void initState() {
     super.initState();
 
+    /* 启动提醒服务 */
     getIt<ReminderBloc>().add(const ReminderEvent.started());
   }
 
@@ -81,9 +103,8 @@ class _MobileViewPageState extends State<MobileViewPage> {
   void dispose() {
     _appBarOpacity.dispose();
 
-    // there's no need to remove the listener, because the observer will be disposed when the widget is unmounted.
-    // inside the observer, the listener will be removed automatically.
-    // _scrollNotificationObserver?.removeListener(_onScrollNotification);
+    /* 不需要手动移除监听器
+     * 观察者在组件卸载时会自动处理 */
     _scrollNotificationObserver = null;
 
     super.dispose();
@@ -92,34 +113,42 @@ class _MobileViewPageState extends State<MobileViewPage> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
+      /* 创建页面级别BLoC，管理视图状态 */
       create: (_) => MobileViewPageBloc(viewId: widget.id)
         ..add(const MobileViewPageEvent.initial()),
       child: BlocBuilder<MobileViewPageBloc, MobileViewPageState>(
         builder: (context, state) {
+          /* 解析视图数据 */
           final view = state.result?.fold((s) => s, (f) => null);
           final body = _buildBody(context, state);
 
+          /* 视图未加载时不显示内容 */
           if (view == null) {
             return SizedBox.shrink();
           }
 
           return MultiBlocProvider(
             providers: [
+              /* 收藏BLoC */
               BlocProvider(
                 create: (_) =>
                     FavoriteBloc()..add(const FavoriteEvent.initial()),
               ),
+              /* 视图BLoC - 管理视图元数据 */
               BlocProvider(
                 create: (_) =>
                     ViewBloc(view: view)..add(const ViewEvent.initial()),
               ),
+              /* 提醒BLoC - 使用全局单例 */
               BlocProvider.value(
                 value: getIt<ReminderBloc>(),
               ),
+              /* 分享BLoC - 管理分享状态 */
               BlocProvider(
                 create: (_) =>
                     ShareBloc(view: view)..add(const ShareEvent.initial()),
               ),
+              /* 工作区BLoC - 只在有用户信息时创建 */
               if (state.userProfilePB != null)
                 BlocProvider(
                   create: (_) => UserWorkspaceBloc(
@@ -129,11 +158,13 @@ class _MobileViewPageState extends State<MobileViewPage> {
                     ),
                   )..add(UserWorkspaceEvent.initialize()),
                 ),
+              /* 文档页面样式BLoC - 仅用于文档视图 */
               if (view.layout.isDocumentView)
                 BlocProvider(
                   create: (_) => DocumentPageStyleBloc(view: view)
                     ..add(const DocumentPageStyleEvent.initial()),
                 ),
+              /* 页面访问级别BLoC - 用于文档和数据库视图 */
               if (view.layout.isDocumentView || view.layout.isDatabaseView)
                 BlocProvider(
                   create: (_) => PageAccessLevelBloc(view: view)
@@ -142,6 +173,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
             ],
             child: Builder(
               builder: (context) {
+                /* 监听视图变化并重建 */
                 final view = context.watch<ViewBloc>().state.view;
                 return _buildApp(context, view, body);
               },

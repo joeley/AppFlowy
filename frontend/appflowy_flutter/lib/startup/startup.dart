@@ -44,57 +44,66 @@ import 'tasks/file_storage_task.dart';
 // 任务系统的通用导入
 import 'tasks/prelude.dart';
 
-/// 全局依赖注入容器实例
-/// 
-/// GetIt是一个服务定位器（Service Locator）模式的实现
-/// 作用类似于Java Spring的ApplicationContext
-/// 通过它可以在应用的任何地方获取注册的依赖对象
-/// 
-/// 使用示例：
-/// - 注册：getIt.registerSingleton<MyService>(MyService())
-/// - 获取：getIt<MyService>()
+/* 
+ * 全局依赖注入容器实例
+ *
+ * GetIt是一个服务定位器（Service Locator）模式的实现
+ * 作用类似于Java Spring的ApplicationContext
+ * 通过它可以在应用的任何地方获取注册的依赖对象
+ *
+ * 使用示例：
+ * - 注册：getIt.registerSingleton<MyService>(MyService())
+ * - 获取：getIt<MyService>()
+ */
 final getIt = GetIt.instance;
 
-/// 应用入口点抽象类
-/// 
-/// 定义了创建应用根Widget的接口
-/// 所有的应用入口实现都必须继承这个类
-/// 这种设计允许不同的启动模式（开发、测试、生产）使用不同的入口实现
+/* 
+ * 应用入口点抽象类
+ *
+ * 定义了创建应用根Widget的接口
+ * 所有的应用入口实现都必须继承这个类
+ * 这种设计允许不同的启动模式（开发、测试、生产）使用不同的入口实现
+ */
 abstract class EntryPoint {
-  /// 根据启动配置创建应用的根Widget
-  /// 这个Widget将成为整个Widget树的根节点
+  /* 根据启动配置创建应用的根Widget
+   * 这个Widget将成为整个Widget树的根节点 */
   Widget create(LaunchConfiguration config);
 }
 
-/// 应用运行上下文
-/// 
-/// 保存应用运行时的重要环境信息
-/// 类似于Android的Context或Spring的ApplicationContext
+/* 
+ * 应用运行上下文
+ *
+ * 保存应用运行时的重要环境信息
+ * 类似于Android的Context或Spring的ApplicationContext
+ */
 class FlowyRunnerContext {
   FlowyRunnerContext({required this.applicationDataDirectory});
 
-  /// 应用数据目录
-  /// 存储用户数据、配置文件、数据库等持久化数据
-  /// 不同平台的路径不同：
-  /// - Windows: C:\Users\<user>\AppData\Roaming\AppFlowy
-  /// - macOS: ~/Library/Application Support/AppFlowy
-  /// - Linux: ~/.config/AppFlowy
+  /* 应用数据目录
+   * 存储用户数据、配置文件、数据库等持久化数据
+   * 不同平台的路径不同：
+   * - Windows: C:\Users\<user>\AppData\Roaming\AppFlowy
+   * - macOS: ~/Library/Application Support/AppFlowy
+   * - Linux: ~/.config/AppFlowy
+   */
   final Directory applicationDataDirectory;
 }
 
-/// AppFlowy应用的主启动函数
-/// 
-/// 这是从main.dart调用的核心启动函数
-/// 负责初始化整个应用的运行环境
-/// 
-/// @param isAnon 是否以匿名模式运行
-///               true: 用户无需登录，数据仅保存在本地
-///               false: 正常模式，支持云同步功能
-/// 
-/// 设计思想：
-/// - 区分发布模式和开发/测试模式的不同启动流程
-/// - 支持热重启（在开发时保持状态）
-/// - 提供测试钩子以支持集成测试
+/* 
+ * AppFlowy应用的主启动函数
+ *
+ * 这是从main.dart调用的核心启动函数
+ * 负责初始化整个应用的运行环境
+ *
+ * @param isAnon 是否以匿名模式运行
+ *               true: 用户无需登录，数据仅保存在本地
+ *               false: 正常模式，支持云同步功能
+ *
+ * 设计思想：
+ * - 区分发布模式和开发/测试模式的不同启动流程
+ * - 支持热重启（在开发时保持状态）
+ * - 提供测试钩子以支持集成测试
+ */
 Future<void> runAppFlowy({bool isAnon = false}) async {
   Log.info('restart AppFlowy: isAnon: $isAnon');
 
@@ -121,36 +130,41 @@ Future<void> runAppFlowy({bool isAnon = false}) async {
   }
 }
 
-/// 应用运行器
-/// 
-/// 核心职责：
-/// 1. 管理应用的启动流程
-/// 2. 协调各个初始化任务的执行
-/// 3. 配置依赖注入容器
-/// 4. 处理不同运行模式的差异
-/// 
-/// 这个类相当于Spring Boot的SpringApplication
-/// 负责编排整个应用的启动过程
+/* 
+ * 应用运行器
+ *
+ * 核心职责：
+ * 1. 管理应用的启动流程
+ * 2. 协调各个初始化任务的执行
+ * 3. 配置依赖注入容器
+ * 4. 处理不同运行模式的差异
+ *
+ * 这个类相当于Spring Boot的SpringApplication
+ * 负责编排整个应用的启动过程
+ */
 class FlowyRunner {
-  /// 当前运行模式
-  /// 
-  /// This variable specifies the initial mode of the app when it is launched for the first time.
-  /// The same mode will be automatically applied in subsequent executions when the runAppFlowy()
-  /// method is called.
-  /// 
-  /// 在热重载时保持模式不变，避免状态丢失
+  /* 当前运行模式
+   *
+   * This variable specifies the initial mode of the app when it is launched for the first time.
+   * The same mode will be automatically applied in subsequent executions when the runAppFlowy()
+   * method is called.
+   *
+   * 在热重载时保持模式不变，避免状态丢失
+   */
   static var currentMode = integrationMode();
 
-  /// 核心启动方法 - 执行完整的应用初始化流程
-  /// 
-  /// 这个方法的设计思想：
-  /// 1. **任务链模式**：通过一系列的LaunchTask顺序执行初始化
-  /// 2. **依赖注入**：使用GetIt管理全局单例和依赖关系
-  /// 3. **模式分离**：根据不同的运行模式执行不同的初始化逻辑
-  /// 
-  /// @param f 应用入口点，负责创建根Widget
-  /// @param mode 运行模式（开发/发布/测试）
-  /// @return 返回包含应用数据目录的上下文
+  /* 
+   * 核心启动方法 - 执行完整的应用初始化流程
+   *
+   * 这个方法的设计思想：
+   * 1. **任务链模式**：通过一系列的LaunchTask顺序执行初始化
+   * 2. **依赖注入**：使用GetIt管理全局单例和依赖关系
+   * 3. **模式分离**：根据不同的运行模式执行不同的初始化逻辑
+   *
+   * @param f 应用入口点，负责创建根Widget
+   * @param mode 运行模式（开发/发布/测试）
+   * @return 返回包含应用数据目录的上下文
+   */
   static Future<FlowyRunnerContext> run(
     EntryPoint f,
     IntegrationMode mode, {
@@ -158,19 +172,19 @@ class FlowyRunner {
     // which is used for dependency injection throughout the app.
     // If your functionality depends on 'getIt', ensure to register
     // your callback here to execute any necessary actions post-initialization.
-    // 
+    //
     // 依赖注入完成后的回调
     // 主要用于测试环境，允许在GetIt初始化后注入额外的测试依赖
     Future Function()? didInitGetItCallback,
     // Passing the envs to the backend
-    // 
+    //
     // Rust后端环境变量构建器
     // 用于向Rust后端传递环境配置，如API地址、调试开关等
     Map<String, String> Function()? rustEnvsBuilder,
     // Indicate whether the app is running in anonymous mode.
     // Note: when the app is running in anonymous mode, the user no need to
     // sign in, and the app will only save the data in the local storage.
-    // 
+    //
     // 匿名模式标志
     // true: 纯本地模式，无需登录，数据不同步到云端
     // false: 支持云同步的完整模式
@@ -229,7 +243,7 @@ class FlowyRunner {
             );
 
     // 添加启动任务链
-    // 
+    //
     // 这里的任务顺序非常重要！每个任务可能依赖前面任务的结果
     // 整个启动流程采用任务链模式，类似于Spring Boot的ApplicationRunner
     final launcher = getIt<AppLauncher>();
@@ -305,15 +319,17 @@ class FlowyRunner {
   }
 }
 
-/// 初始化依赖注入容器
-/// 
-/// 这个函数负责注册所有全局单例和服务
-/// GetIt使用不同的注册方式：
-/// - registerFactory: 每次请求时创建新实例
-/// - registerSingleton: 立即创建单例
-/// - registerLazySingleton: 延迟创建单例（第一次使用时创建）
-/// 
-/// 这个设计类似于Spring的@Component、@Service注解
+/* 
+ * 初始化依赖注入容器
+ *
+ * 这个函数负责注册所有全局单例和服务
+ * GetIt使用不同的注册方式：
+ * - registerFactory: 每次请求时创建新实例
+ * - registerSingleton: 立即创建单例
+ * - registerLazySingleton: 延迟创建单例（第一次使用时创建）
+ *
+ * 这个设计类似于Spring的@Component、@Service注解
+ */
 Future<void> initGetIt(
   GetIt getIt,
   IntegrationMode mode,
@@ -323,7 +339,7 @@ Future<void> initGetIt(
   // 注册应用入口点为工厂模式
   // 每次获取时都会返回同一个实例
   getIt.registerFactory<EntryPoint>(() => f);
-  
+
   // 注册Flowy SDK为懒加载单例
   // SDK负责与Rust后端通信
   getIt.registerLazySingleton<FlowySDK>(
@@ -335,7 +351,7 @@ Future<void> initGetIt(
       await sdk.dispose();
     },
   );
-  
+
   // 注册应用启动器
   // AppLauncher管理所有启动任务
   getIt.registerLazySingleton<AppLauncher>(
@@ -350,9 +366,9 @@ Future<void> initGetIt(
       await launcher.dispose();
     },
   );
-  
+
   // === 注册全局单例服务 ===
-  
+
   // 插件沙箱：管理和隔离插件运行环境
   getIt.registerSingleton<PluginSandbox>(PluginSandbox());
   // 视图展开注册表：管理可展开视图的注册
@@ -371,58 +387,54 @@ Future<void> initGetIt(
   await DependencyResolver.resolve(getIt, mode);
 }
 
-/// 启动上下文
-/// 
-/// 保存启动过程中需要的所有信息
-/// 传递给每个启动任务，让任务可以访问全局配置和依赖
+/* 
+ * 启动上下文
+ *
+ * 保存启动过程中需要的所有信息
+ * 传递给每个启动任务，让任务可以访问全局配置和依赖
+ */
 class LaunchContext {
   LaunchContext(this.getIt, this.env, this.config);
 
-  /// 依赖注入容器
-  GetIt getIt;
-  /// 运行模式
-  IntegrationMode env;
-  /// 启动配置
-  LaunchConfiguration config;
+  GetIt getIt;           // 依赖注入容器
+  IntegrationMode env;   // 运行模式
+  LaunchConfiguration config; // 启动配置
 }
 
-/// 启动任务类型
-/// 
-/// 用于分类不同的启动任务
+/* 启动任务类型 - 用于分类不同的启动任务 */
 enum LaunchTaskType {
-  /// 数据处理任务：初始化数据库、加载配置等
-  dataProcessing,
-  /// 应用启动任务：UI初始化、服务启动等
-  appLauncher,
+  dataProcessing,  // 数据处理任务：初始化数据库、加载配置等
+  appLauncher,     // 应用启动任务：UI初始化、服务启动等
 }
 
-/// 启动任务基类
-/// 
-/// The interface of an app launch task, which will trigger
-/// some nonresident indispensable task in app launching task.
-/// 
-/// 这是一个模板方法模式的实现
-/// 所有启动任务都必须继承这个类并实现相应的方法
-/// 
-/// 生命周期：
-/// 1. initialize: 任务初始化，执行主要逻辑
-/// 2. dispose: 任务清理，释放资源
+/* 
+ * 启动任务基类
+ *
+ * The interface of an app launch task, which will trigger
+ * some nonresident indispensable task in app launching task.
+ *
+ * 这是一个模板方法模式的实现
+ * 所有启动任务都必须继承这个类并实现相应的方法
+ *
+ * 生命周期：
+ * 1. initialize: 任务初始化，执行主要逻辑
+ * 2. dispose: 任务清理，释放资源
+ */
 class LaunchTask {
   const LaunchTask();
 
-  /// 任务类型，默认为数据处理类型
+  /* 任务类型，默认为数据处理类型 */
   LaunchTaskType get type => LaunchTaskType.dataProcessing;
 
-  /// 初始化任务
-  /// @mustCallSuper 注解表示子类重写时必须调用super
-  /// 这确保日志记录等基础功能不会被跳过
+  /* 初始化任务
+   * @mustCallSuper 注解表示子类重写时必须调用super
+   * 这确保日志记录等基础功能不会被跳过 */
   @mustCallSuper
   Future<void> initialize(LaunchContext context) async {
     Log.info('LaunchTask: $runtimeType initialize');
   }
 
-  /// 清理任务
-  /// 在应用关闭或热重载时调用
+  /* 清理任务 - 在应用关闭或热重载时调用 */
   @mustCallSuper
   Future<void> dispose() async {
     Log.info('LaunchTask: $runtimeType dispose');
@@ -430,7 +442,7 @@ class LaunchTask {
 }
 
 /// 应用启动器
-/// 
+///
 /// 管理和执行所有启动任务
 /// 这个类的设计模式：
 /// 1. **任务链模式**：按顺序执行一系列任务
@@ -465,7 +477,7 @@ class AppLauncher {
   }
 
   /// 启动所有任务
-  /// 
+  ///
   /// 按顺序执行所有注册的任务
   /// 如果任何任务失败，整个启动流程将中断
   /// 记录每个任务和总体的执行时间，便于性能分析
@@ -493,7 +505,7 @@ class AppLauncher {
   }
 
   /// 清理所有任务
-  /// 
+  ///
   /// 在应用关闭或热重载时调用
   /// 确保所有资源被正确释放，避免内存泄漏
   Future<void> dispose() async {
@@ -514,14 +526,14 @@ class AppLauncher {
 }
 
 /// 应用运行模式枚举
-/// 
+///
 /// 定义了应用的不同运行环境
 /// 每种模式会影响：
 /// - 启动任务的选择
 /// - 日志级别
 /// - 错误处理方式
 /// - 性能监控
-/// 
+///
 /// 这种设计类似于Spring Boot的profiles
 enum IntegrationMode {
   /// 开发模式：启用所有调试功能
@@ -553,12 +565,12 @@ enum IntegrationMode {
 }
 
 /// 自动检测当前运行模式
-/// 
+///
 /// 检测顺序：
 /// 1. 检查FLUTTER_TEST环境变量，判断是否为测试模式
 /// 2. 检查kReleaseMode常量，判断是否为发布版本
 /// 3. 默认返回开发模式
-/// 
+///
 /// 这个函数相当于Spring Boot的自动环境检测
 IntegrationMode integrationMode() {
   // Flutter测试框架会设置这个环境变量
@@ -577,12 +589,12 @@ IntegrationMode integrationMode() {
 }
 
 /// 集成测试辅助类
-/// 
+///
 /// Only used for integration test
-/// 
+///
 /// 提供集成测试所需的钩子和配置
 /// 这些静态变量允许测试代码在应用启动过程中注入自定义逻辑
-/// 
+///
 /// 设计模式：测试钩子（Test Hook）
 class IntegrationTestHelper {
   /// GetIt初始化后的回调

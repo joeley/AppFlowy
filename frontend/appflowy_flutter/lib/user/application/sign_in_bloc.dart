@@ -18,7 +18,23 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'sign_in_bloc.freezed.dart';
 
+/**
+ * 登录页BLoC - 管理登录页的复杂业务逻辑
+ * 
+ * 这是一个复杂BLoC的典型示例，展示了：
+ * 1. 多种登录方式的处理
+ * 2. 表单验证和错误处理
+ * 3. 异步操作的状态管理
+ * 4. 外部事件监听（DeepLink）
+ * 5. 依赖注入和服务交互
+ */
 class SignInBloc extends Bloc<SignInEvent, SignInState> {
+  /**
+   * 构造函数
+   * 
+   * @param authService 认证服务 - 通过依赖注入传入
+   *                    负责实际的登录、注册等操作
+   */
   SignInBloc(this.authService) : super(SignInState.initial()) {
     if (isAppFlowyCloudEnabled) {
       deepLinkStateListener =
@@ -37,6 +53,12 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       });
     }
 
+    /**
+     * 注册事件处理器
+     * 
+     * 使用when方法进行模式匹配，处理各种事件
+     * 每个事件对应一个用户操作或系统事件
+     */
     on<SignInEvent>(
       (event, emit) async {
         await event.when(
@@ -547,22 +569,92 @@ enum LoginType {
   signUp,
 }
 
+/**
+ * 登录页状态 - 包含所有UI需要的数据
+ * 
+ * 这个状态类展示了复杂表单的状态管理
+ * 每个属性都对应UI的一个方面
+ */
 @freezed
 class SignInState with _$SignInState {
   const factory SignInState({
+    /**
+     * 邮箱输入框的值
+     * 可空，表示用户可能还没有输入
+     */
     String? email,
+    
+    /**
+     * 密码输入框的值
+     * 可空，表示用户可能还没有输入
+     */
     String? password,
+    
+    /**
+     * 是否正在提交
+     * true时UI应该显示加载动画并禁用表单
+     * 防止重复提交
+     */
     required bool isSubmitting,
+    
+    /**
+     * 密码错误信息
+     * 用于显示在密码输入框下方
+     * null表示没有错误
+     */
     required String? passwordError,
+    
+    /**
+     * 邮箱错误信息
+     * 用于显示在邮箱输入框下方
+     * null表示没有错误
+     */
     required String? emailError,
+    
+    /**
+     * 登录操作的结果
+     * FlowyResult是一个Either类型：
+     * - 成功：UserProfilePB（用户信息）
+     * - 失败：FlowyError（错误信息）
+     * null表示还没有进行登录操作
+     */
     required FlowyResult<UserProfilePB, FlowyError>? successOrFail,
+    
+    /**
+     * 忘记密码操作的结果
+     * 成功返回true，失败返回错误
+     */
     required FlowyResult<bool, FlowyError>? forgotPasswordSuccessOrFail,
+    
+    /**
+     * 验证重置密码令牌的结果
+     * 用于确认重置密码链接是否有效
+     */
     required FlowyResult<bool, FlowyError>?
         validateResetPasswordTokenSuccessOrFail,
+    
+    /**
+     * 重置密码操作的结果
+     * 成功返回true，失败返回错误
+     */
     required FlowyResult<bool, FlowyError>? resetPasswordSuccessOrFail,
+    
+    /**
+     * 登录类型
+     * 默认为登录模式，也可以是注册模式
+     * @Default注解设置默认值
+     */
     @Default(LoginType.signIn) LoginType loginType,
   }) = _SignInState;
 
+  /**
+   * 初始状态工厂方法
+   * 
+   * 设置所有字段的初始值：
+   * - 未提交
+   * - 无错误
+   * - 无操作结果
+   */
   factory SignInState.initial() => const SignInState(
         isSubmitting: false,
         passwordError: null,
