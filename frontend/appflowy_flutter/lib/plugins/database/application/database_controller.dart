@@ -1,3 +1,35 @@
+/*
+ * AppFlowy 数据库系统架构文档
+ * 
+ * 设计理念：
+ * AppFlowy 的数据库系统采用 MVC 架构，实现了类似 Notion Database 的功能。
+ * 核心思想是将数据与视图分离，同一份数据可以有多种展示形式（表格、看板、日历等）。
+ * 
+ * 架构分层：
+ * 1. 后端层（Rust）：负责数据持久化、业务逻辑处理
+ * 2. 控制器层（Flutter）：管理数据流转、状态同步
+ * 3. 视图层（Flutter）：负责 UI 渲染和用户交互
+ * 
+ * 核心组件：
+ * - DatabaseController：数据库总控制器，协调各个子系统
+ * - FieldController：字段（列）管理器，处理字段的增删改
+ * - RowController：行管理器，处理行数据的操作
+ * - CellController：单元格控制器，管理单个单元格的数据
+ * 
+ * 数据流：
+ * 用户操作 -> Controller -> Backend Service (FFI) -> Rust Backend
+ * Backend 变化 -> Listener -> Controller -> UI 更新
+ * 
+ * 缓存策略：
+ * - ViewCache：视图级缓存，存储当前视图的所有数据
+ * - RowCache：行级缓存，优化行数据的访问
+ * - CellMemCache：单元格缓存，减少重复数据加载
+ * 
+ * 监听机制：
+ * 使用观察者模式，通过 Listener 监听后端数据变化，
+ * 支持多个监听者同时监听同一事件，实现实时同步。
+ */
+
 import 'dart:async';
 
 import 'package:appflowy/plugins/database/application/field/field_controller.dart';
@@ -17,19 +49,44 @@ import 'package:flutter/material.dart';
 import 'defines.dart';
 import 'row/row_cache.dart';
 
+/*
+ * 分组功能回调定义
+ * 
+ * 分组是数据库视图的重要特性，允许用户按某个字段对数据进行分类展示。
+ * 例如：在看板视图中，每个列就是一个分组。
+ */
+
 /// 分组配置变化回调
+/// 当分组的设置发生变化时触发（如分组字段、分组条件等）
 typedef OnGroupConfigurationChanged = void Function(List<GroupSettingPB>);
+
 /// 按字段分组回调
+/// 当选择新的字段进行分组时触发
 typedef OnGroupByField = void Function(List<GroupPB>);
+
 /// 更新分组回调
+/// 当已有分组的内容发生变化时触发
 typedef OnUpdateGroup = void Function(List<GroupPB>);
+
 /// 删除分组回调
+/// 当分组被删除时触发
 typedef OnDeleteGroup = void Function(List<String>);
+
 /// 插入分组回调
+/// 当新增分组时触发
 typedef OnInsertGroup = void Function(InsertedGroupPB);
 
-/// 分组相关的回调集合
-/// 用于监听分组的各种变化事件
+/*
+ * 分组回调集合
+ * 
+ * 设计目的：
+ * 将所有分组相关的回调封装在一起，便于管理和传递。
+ * 使用可选参数设计，调用者只需要监听感兴趣的事件。
+ * 
+ * 使用场景：
+ * - 看板视图：监听分组变化来更新列
+ * - 表格视图：监听分组设置来显示分组行
+ */
 class GroupCallbacks {
   GroupCallbacks({
     this.onGroupConfigurationChanged,  // 分组配置变化
@@ -46,8 +103,16 @@ class GroupCallbacks {
   final OnInsertGroup? onInsertGroup;
 }
 
-/// 数据库布局设置回调
-/// 监听布局设置的变化（如看板布局、日历设置等）
+/*
+ * 数据库布局设置回调
+ * 
+ * 功能说明：
+ * 每种视图布局（表格、看板、日历）都有独特的设置项。
+ * 例如：
+ * - 看板：卡片显示哪些字段、是否显示封面等
+ * - 日历：首日是周一还是周日、时间格式等
+ * - 表格：行高、是否显示网格线等
+ */
 class DatabaseLayoutSettingCallbacks {
   DatabaseLayoutSettingCallbacks({
     required this.onLayoutSettingsChanged,  // 布局设置变化回调
@@ -56,8 +121,23 @@ class DatabaseLayoutSettingCallbacks {
   final void Function(DatabaseLayoutSettingPB) onLayoutSettingsChanged;
 }
 
-/// 数据库核心回调集合
-/// 管理数据库的所有状态变化事件
+/*
+ * 数据库核心回调集合
+ * 
+ * 设计理念：
+ * 采用细粒度的事件通知机制，让监听者可以精确地响应特定变化。
+ * 避免全量刷新，提高性能和用户体验。
+ * 
+ * 事件类型说明：
+ * - onDatabaseChanged：数据库元信息变化（如名称、描述等）
+ * - onNumOfRowsChanged：行数变化（用于更新统计信息）
+ * - onFieldsChanged：字段结构变化（新增、删除、修改字段）
+ * - onFiltersChanged：过滤条件变化（影响数据显示）
+ * - onSortsChanged：排序规则变化（影响数据顺序）
+ * - onRowsUpdated：行内容更新（单元格数据变化）
+ * - onRowsDeleted：行被删除
+ * - onRowsCreated：新增行
+ */
 class DatabaseCallbacks {
   DatabaseCallbacks({
     this.onDatabaseChanged,  // 数据库变化
@@ -80,19 +160,33 @@ class DatabaseCallbacks {
   OnRowsCreated? onRowsCreated;
 }
 
-/// 数据库控制器
-/// 
-/// AppFlowy数据库功能的核心控制器，管理：
-/// 1. 视图模式切换（表格、看板、日历等）
-/// 2. 数据的增删改查
-/// 3. 字段管理和类型转换
-/// 4. 分组、排序、过滤等高级功能
-/// 5. 布局设置和个性化配置
-/// 
-/// 架构设计：
-/// - 使用观察者模式监听数据变化
-/// - 通过回调集合管理多个监听者
-/// - 与后端服务通信获取和更新数据
+/*
+ * 数据库控制器 - 数据库系统的核心
+ * 
+ * 职责定位：
+ * DatabaseController 是整个数据库系统的中枢，负责协调各个子系统的工作。
+ * 它不直接处理具体的业务逻辑，而是作为协调者，将任务分发给专门的控制器。
+ * 
+ * 核心功能：
+ * 1. 视图管理：支持表格、看板、日历等多种视图模式
+ * 2. 数据操作：通过 RowCache 管理行数据的增删改查
+ * 3. 字段系统：通过 FieldController 管理字段结构
+ * 4. 高级特性：分组、排序、过滤等数据组织功能
+ * 5. 个性化：布局设置、紧凑模式等用户偏好
+ * 
+ * 设计模式：
+ * - 观察者模式：通过回调集合支持多个监听者
+ * - 门面模式：对外提供统一的接口，隐藏内部复杂性
+ * - 依赖注入：通过构造函数注入所需的服务和控制器
+ * 
+ * 生命周期：
+ * 创建 -> open() 初始化 -> 监听事件 -> 处理用户操作 -> dispose() 释放资源
+ * 
+ * 性能优化：
+ * - 使用缓存减少后端调用
+ * - 批量处理事件通知
+ * - 懒加载数据
+ */
 class DatabaseController {
   DatabaseController({required this.view})
       : _databaseViewBackendSvc = DatabaseViewBackendService(viewId: view.id),  // 后端服务
@@ -137,6 +231,12 @@ class DatabaseController {
   final DatabaseGroupListener _groupListener;  // 分组监听器
   final DatabaseLayoutSettingListener _layoutListener;  // 布局设置监听器
 
+  /*
+   * 状态管理
+   * 
+   * 加载状态：用于显示加载动画，提升用户体验
+   * 紧凑模式：允许用户选择信息密度，平衡信息量和可读性
+   */
   /// 加载状态通知器
   final ValueNotifier<bool> _isLoading = ValueNotifier(true);
   /// 紧凑模式通知器（控制视图显示密度）
@@ -211,8 +311,19 @@ class DatabaseController {
     }
   }
 
-  /// 打开数据库
-  /// 加载数据库数据、字段、分组和布局设置
+  /*
+   * 打开数据库
+   * 
+   * 初始化流程：
+   * 1. 从后端加载数据库基本信息
+   * 2. 加载字段定义（必须优先加载，因为行数据依赖字段）
+   * 3. 初始化行缓存
+   * 4. 加载分组设置（如果有）
+   * 5. 加载布局特定设置
+   * 
+   * 错误处理：
+   * 任何步骤失败都会返回错误，避免部分初始化状态
+   */
   Future<FlowyResult<void, FlowyError>> open() async {
     return _databaseViewBackendSvc.openDatabase().then((result) {
       return result.fold(
@@ -248,8 +359,19 @@ class DatabaseController {
     });
   }
 
-  /// 在分组之间移动行
-  /// 用于看板视图中卡片在不同列之间的拖动
+  /*
+   * 在分组之间移动行
+   * 
+   * 使用场景：
+   * 主要用于看板视图，当用户拖动卡片到另一个列时调用。
+   * 移动行会自动更新该行对应的分组字段值。
+   * 
+   * 参数说明：
+   * - fromRow：要移动的行
+   * - fromGroupId：源分组ID
+   * - toGroupId：目标分组ID
+   * - toRow：目标位置的参考行（可选，用于精确定位）
+   */
   Future<FlowyResult<void, FlowyError>> moveGroupRow({
     required RowMetaPB fromRow,  // 源行
     required String fromGroupId,  // 源分组ID
@@ -305,8 +427,18 @@ class DatabaseController {
     });
   }
 
-  /// 释放资源
-  /// 关闭视图、停止监听器、清理回调
+  /*
+   * 释放资源
+   * 
+   * 清理顺序很重要：
+   * 1. 先关闭后端连接，停止数据流
+   * 2. 停止所有监听器，避免内存泄漏
+   * 3. 清理缓存数据
+   * 4. 清空回调集合
+   * 5. 释放 ValueNotifier
+   * 
+   * 注意：必须确保所有异步操作完成后才能释放
+   */
   Future<void> dispose() async {
     await _databaseViewBackendSvc.closeView();
     await fieldController.dispose();

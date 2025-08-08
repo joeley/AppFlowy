@@ -1,3 +1,29 @@
+/*
+ * 行缓存 - 数据库行数据的集中管理
+ * 
+ * 设计理念：
+ * RowCache 作为数据库视图中所有行数据的中心缓存，
+ * 管理行的增删改查操作，并协调单元格缓存。
+ * 
+ * 核心功能：
+ * 1. 行列表管理：维护有序的行列表
+ * 2. 单元格缓存：管理所有单元格的数据缓存
+ * 3. 变化通知：当行数据变化时通知观察者
+ * 4. 可见性管理：处理行的显示/隐藏（过滤器影响）
+ * 5. 排序支持：支持行的重新排序
+ * 
+ * 数据流：
+ * 后端变化 -> RowsChangePB/RowsVisibilityChangePB -> RowCache -> UI更新
+ * 
+ * 性能优化：
+ * - 使用 RowList 维护有序列表和快速查找
+ * - 单元格数据缓存避免重复加载
+ * - 批量处理变化减少UI更新
+ * 
+ * 架构说明：
+ * 更多信息请参考: https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/grid
+ */
+
 import 'dart:collection';
 
 import 'package:equatable/equatable.dart';
@@ -18,18 +44,43 @@ part 'row_cache.freezed.dart';
 
 typedef RowUpdateCallback = void Function();
 
-/// A delegate that provides the fields of the row.
+/*
+ * 行字段委托
+ * 
+ * 为行缓存提供字段信息的访问接口。
+ * 通过委托模式解耦 RowCache 和 FieldController。
+ */
 abstract class RowFieldsDelegate {
   UnmodifiableListView<FieldInfo> get fieldInfos;
   void onFieldsChanged(void Function(List<FieldInfo>) callback);
 }
 
+/*
+ * 行生命周期
+ * 
+ * 定义行释放时的回调接口。
+ * 确保资源正确清理，避免内存泄漏。
+ */
 abstract mixin class RowLifeCycle {
   void onRowDisposed();
 }
 
-/// Read https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/grid for more information.
-
+/*
+ * 行缓存类
+ * 
+ * 这是数据库视图的核心缓存组件，管理所有行和单元格数据。
+ * 
+ * 主要组件：
+ * - _rowList：维护行的有序列表
+ * - _cellMemCache：存储所有单元格数据
+ * - _changedNotifier：管理变化通知
+ * 
+ * 初始化逻辑：
+ * 1. 创建各种缓存和通知器
+ * 2. 监听字段变化，当字段被删除时清理对应单元格
+ * 
+ * 更多信息: https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/grid
+ */
 class RowCache {
   RowCache({
     required this.viewId,
@@ -39,8 +90,8 @@ class RowCache {
         _changedNotifier = RowChangesetNotifier(),
         _rowLifeCycle = rowLifeCycle,
         _fieldDelegate = fieldsDelegate {
-    // Listen to field changes. If a field is deleted, we can safely remove the
-    // cells corresponding to that field from our cache.
+    // 监听字段变化。如果字段被删除，我们可以安全地从缓存中
+    // 移除对应的单元格数据
     fieldsDelegate.onFieldsChanged((fieldInfos) {
       for (final fieldInfo in fieldInfos) {
         _cellMemCache.removeCellWithFieldId(fieldInfo.id);
@@ -59,13 +110,23 @@ class RowCache {
   bool _isInitialRows = false;
   final List<RowsVisibilityChangePB> _pendingVisibilityChanges = [];
 
-  /// Returns a unmodifiable list of RowInfo
+  /*
+   * 获取行列表
+   * 
+   * 返回不可修改的行信息列表，保证数据安全性。
+   * 外部只能读取，不能直接修改列表。
+   */
   UnmodifiableListView<RowInfo> get rowInfos {
     final visibleRows = [..._rowList.rows];
     return UnmodifiableListView(visibleRows);
   }
 
-  /// Returns a unmodifiable map of RowInfo
+  /*
+   * 获取行映射
+   * 
+   * 返回 rowId -> RowInfo 的不可修改映射。
+   * 用于快速根据 ID 查找行信息。
+   */
   UnmodifiableMapView<RowId, RowInfo> get rowByRowId {
     return UnmodifiableMapView(_rowList.rowInfoByRowId);
   }
@@ -78,6 +139,19 @@ class RowCache {
     return _rowList.get(rowId);
   }
 
+  /*
+   * 设置初始行数据
+   * 
+   * 在打开数据库时调用，加载所有行数据。
+   * 
+   * 处理流程：
+   * 1. 构建所有行信息并添加到列表
+   * 2. 标记初始化完成
+   * 3. 应用等待中的可见性变化
+   * 
+   * 注意：可见性变化可能在初始化之前到达，
+   * 需要缓存起来等初始化完成后应用。
+   */
   void setInitialRows(List<RowMetaPB> rows) {
     for (final row in rows) {
       final rowInfo = buildGridRow(row);
@@ -86,6 +160,7 @@ class RowCache {
     _isInitialRows = true;
     _changedNotifier?.receive(const ChangedReason.setInitialRows());
 
+    // 应用等待中的可见性变化
     for (final changeset in _pendingVisibilityChanges) {
       applyRowsVisibility(changeset);
     }
@@ -109,12 +184,33 @@ class RowCache {
     _cellMemCache.dispose();
   }
 
+  /*
+   * 应用行变化
+   * 
+   * 处理后端推送的行变化事件。
+   * 
+   * 处理顺序很重要：
+   * 1. 先删除：避免 ID 冲突
+   * 2. 再插入：添加新行
+   * 3. 最后更新：修改现有行
+   */
   void applyRowsChanged(RowsChangePB changeset) {
     _deleteRows(changeset.deletedRows);
     _insertRows(changeset.insertedRows);
     _updateRows(changeset.updatedRows);
   }
 
+  /*
+   * 应用行可见性变化
+   * 
+   * 处理过滤器导致的行显示/隐藏变化。
+   * 
+   * 时序处理：
+   * - 如果初始化完成：立即应用变化
+   * - 如果未初始化：缓存起来等待初始化
+   * 
+   * 这种设计避免了竞态条件和数据不一致。
+   */
   void applyRowsVisibility(RowsVisibilityChangePB changeset) {
     if (_isInitialRows) {
       _hideRows(changeset.invisibleRows);
@@ -127,11 +223,28 @@ class RowCache {
     }
   }
 
+  /*
+   * 重排所有行
+   * 
+   * 根据新的 ID 列表重新排列所有行。
+   * 通常用于应用排序规则后的结果。
+   */
   void reorderAllRows(List<String> rowIds) {
     _rowList.reorderWithRowIds(rowIds);
     _changedNotifier?.receive(const ChangedReason.reorderRows());
   }
 
+  /*
+   * 重排单个行
+   * 
+   * 移动单个行到新位置。
+   * 通常用于用户拖动行的场景。
+   * 
+   * 参数：
+   * - rowId：要移动的行
+   * - oldIndex：原位置
+   * - newIndex：新位置
+   */
   void reorderSingleRow(ReorderSingleRowPB reorderRow) {
     final rowInfo = _rowList.get(reorderRow.rowId);
     if (rowInfo != null) {
