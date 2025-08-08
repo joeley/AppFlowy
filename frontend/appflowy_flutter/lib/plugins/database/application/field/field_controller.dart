@@ -296,26 +296,32 @@ class FieldController {
    * 3. 更新字段的排序标记
    */
   void _listenOnSortChanged() {
+    // 内部函数：处理删除的排序
     void deleteSortFromChangeset(
       List<DatabaseSort> newDatabaseSorts,
       SortChangesetNotificationPB changeset,
     ) {
+      // 提取所有要删除的排序 ID
       final deleteSortIds = changeset.deleteSorts.map((e) => e.id).toList();
       if (deleteSortIds.isNotEmpty) {
+        // 保留不在删除列表中的排序
         newDatabaseSorts.retainWhere(
           (element) => !deleteSortIds.contains(element.sortId),
         );
       }
     }
 
+    // 内部函数：处理新增的排序
     void insertSortFromChangeset(
       List<DatabaseSort> newDatabaseSorts,
       SortChangesetNotificationPB changeset,
     ) {
       for (final newSortPB in changeset.insertSorts) {
+        // 检查排序是否已存在
         final sortIndex = newDatabaseSorts
             .indexWhere((element) => element.sortId == newSortPB.sort.id);
         if (sortIndex == -1) {
+          // 不存在则在指定位置插入新排序
           newDatabaseSorts.insert(
             newSortPB.index,
             DatabaseSort.fromPB(newSortPB.sort),
@@ -324,30 +330,37 @@ class FieldController {
       }
     }
 
+    // 内部函数：处理更新的排序
     void updateSortFromChangeset(
       List<DatabaseSort> newDatabaseSorts,
       SortChangesetNotificationPB changeset,
     ) {
       for (final updatedSort in changeset.updateSorts) {
+        // 创建新的排序对象
         final newDatabaseSort = DatabaseSort.fromPB(updatedSort);
 
+        // 查找现有排序的位置
         final sortIndex = newDatabaseSorts.indexWhere(
           (element) => element.sortId == updatedSort.id,
         );
 
         if (sortIndex != -1) {
+          // 找到则替换，保持位置不变
           newDatabaseSorts.removeAt(sortIndex);
           newDatabaseSorts.insert(sortIndex, newDatabaseSort);
         } else {
+          // 没找到则添加到末尾
           newDatabaseSorts.add(newDatabaseSort);
         }
       }
     }
 
+    // 内部函数：更新受影响字段的排序标记
     void updateFieldInfos(
       List<DatabaseSort> newDatabaseSorts,
       SortChangesetNotificationPB changeset,
     ) {
+      // 收集所有受影响的字段 ID
       final changedFieldIds = HashSet<String>.from([
         ...changeset.insertSorts.map((sort) => sort.sort.fieldId),
         ...changeset.updateSorts.map((sort) => sort.fieldId),
@@ -355,34 +368,42 @@ class FieldController {
         ...?_sortNotifier?.sorts.map((sort) => sort.fieldId),
       ]);
 
+      // 创建字段信息副本
       final newFieldInfos = [...fieldInfos];
 
+      // 遍历所有受影响的字段
       for (final fieldId in changedFieldIds) {
         final index =
             newFieldInfos.indexWhere((fieldInfo) => fieldInfo.id == fieldId);
         if (index == -1) {
-          continue;
+          continue;  // 字段不存在，跳过
         }
+        // 更新字段的 hasSort 标记
         newFieldInfos[index] = newFieldInfos[index].copyWith(
           hasSort: newDatabaseSorts.any((sort) => sort.fieldId == fieldId),
         );
       }
 
+      // 通知字段信息变化
       _fieldNotifier.fieldInfos = newFieldInfos;
     }
 
+    // 启动排序监听器
     _sortsListener.start(
       onSortChanged: (result) {
         if (_isDisposed) {
-          return;
+          return;  // 已释放则直接返回
         }
         result.fold(
           (SortChangesetNotificationPB changeset) {
+            // 获取当前排序列表的副本
             final List<DatabaseSort> newDatabaseSorts = sorts;
+            // 按顺序处理变化：删除 -> 插入 -> 更新
             deleteSortFromChangeset(newDatabaseSorts, changeset);
             insertSortFromChangeset(newDatabaseSorts, changeset);
             updateSortFromChangeset(newDatabaseSorts, changeset);
 
+            // 更新受影响字段的标记并通知变化
             updateFieldInfos(newDatabaseSorts, changeset);
             _sortNotifier?.sorts = newDatabaseSorts;
           },

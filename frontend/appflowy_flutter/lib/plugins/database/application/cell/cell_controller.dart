@@ -222,30 +222,54 @@ class CellController<T, D> {
     }
   }
 
+  /*
+   * 字段变化监听器回调
+   * 
+   * 当字段配置发生变化时触发此方法。
+   * 根据 reloadOnFieldChange 标志决定是否重新加载数据。
+   */
   void _onFieldChangedListener(FieldInfo fieldInfo) {
-    // reloadOnFieldChanged should be true if you want to reload the cell
-    // data when the corresponding field is changed.
-    // For example:
-    //   ￥12 -> $12
+    // reloadOnFieldChanged 应该在需要重新加载单元格数据时设为 true
+    // 当对应字段发生变化时会触发重新加载
+    // 例如：货币符号变化 ￥12 -> $12
     if (_cellDataLoader.reloadOnFieldChange) {
-      _loadData();
+      _loadData();  // 触发数据重新加载
     }
   }
 
-  /// Get the cell data. The cell data will be read from the cache first,
-  /// and load from disk if it doesn't exist. You can set [loadIfNotExist] to
-  /// false to disable this behavior.
+  /*
+   * 获取单元格数据
+   * 
+   * 数据获取策略：
+   * 1. 首先尝试从缓存读取
+   * 2. 如果缓存中没有且 loadIfNotExist 为 true，则从磁盘加载
+   * 
+   * 参数：
+   * - loadIfNotExist：控制是否在缓存未命中时自动加载，默认 true
+   * 
+   * 返回：类型 T 的数据，如果没有数据返回 null
+   */
   T? getCellData({bool loadIfNotExist = true}) {
+    // 先尝试从缓存获取数据
     final T? data = _cellCache.get(_cellContext);
+    // 如果缓存中没有数据且允许加载，则触发异步加载
     if (data == null && loadIfNotExist) {
       _loadData();
     }
     return data;
   }
 
-  /// Return the TypeOptionPB that can be parsed into corresponding class using the [parser].
-  /// [PD] is the type that the parser return.
+  /*
+   * 获取字段类型选项
+   * 
+   * 使用解析器将字段的类型选项数据转换为具体的类型选项对象。
+   * 不同字段类型有不同的选项，如数字字段的格式、日期字段的时间格式等。
+   * 
+   * 泛型参数 PD：解析器返回的数据类型
+   * 参数 parser：类型选项解析器
+   */
   PD getTypeOption<PD>(TypeOptionParser parser) {
+    // 从字段的 typeOptionData 二进制数据中解析出类型选项
     return parser.fromBuffer(fieldInfo.field.typeOptionData);
   }
 

@@ -248,11 +248,15 @@ class DatabaseController {
   /// 获取加载状态通知器
   ValueNotifier<bool> get isLoading => _isLoading;
 
-  /// 设置紧凑模式
-  /// 紧凑模式会减少行高和间距，显示更多内容
+  /*
+   * 设置紧凑模式
+   * 
+   * 紧凑模式会减少行高和间距，显示更多内容。
+   * 适合需要浏览大量数据的场景。
+   */
   void setCompactMode(bool compactMode) {
-    _compactMode.value = compactMode;
-    // 通知所有监听者
+    _compactMode.value = compactMode;  // 更新内部状态
+    // 通知所有监听者（使用 Set.of 创建副本，避免在遍历时修改集合）
     for (final callback in Set.of(_compactModeCallbacks)) {
       callback.call(compactMode);
     }
@@ -261,14 +265,19 @@ class DatabaseController {
   /// 获取紧凑模式通知器
   ValueNotifier<bool> get compactModeNotifier => _compactMode;
 
-  /// 添加监听器
-  /// 支持添加多种类型的监听器以监听不同的事件
+  /*
+   * 添加监听器
+   * 
+   * 支持添加多种类型的监听器以监听不同的事件。
+   * 使用可选参数设计，调用者只需要添加关心的监听器。
+   */
   void addListener({
     DatabaseCallbacks? onDatabaseChanged,  // 数据库变化监听
     DatabaseLayoutSettingCallbacks? onLayoutSettingsChanged,  // 布局设置监听
     GroupCallbacks? onGroupChanged,  // 分组变化监听
     ValueChanged<bool>? onCompactModeChanged,  // 紧凑模式监听
   }) {
+    // 根据参数添加对应的监听器到相应集合
     if (onLayoutSettingsChanged != null) {
       _layoutCallbacks.add(onLayoutSettingsChanged);
     }
@@ -328,6 +337,7 @@ class DatabaseController {
     return _databaseViewBackendSvc.openDatabase().then((result) {
       return result.fold(
         (DatabasePB database) async {
+          // 保存布局类型
           databaseLayout = database.layoutType;
 
           // 加载实际的数据库字段数据
@@ -341,7 +351,9 @@ class DatabaseController {
               for (final callback in _databaseCallbacks) {
                 callback.onDatabaseChanged?.call(database);
               }
+              // 设置初始行数据
               _viewCache.rowCache.setInitialRows(database.rows);
+              // 异步加载分组和布局设置
               return Future(() async {
                 await _loadGroups();
                 await _loadLayoutSetting();
@@ -386,8 +398,12 @@ class DatabaseController {
     );
   }
 
-  /// 移动行位置
-  /// 用于调整行的顺序
+  /*
+   * 移动行位置
+   * 
+   * 用于在同一视图内调整行的顺序。
+   * 通常用于用户手动拖动排序的场景。
+   */
   Future<FlowyResult<void, FlowyError>> moveRow({
     required String fromRowId,  // 要移动的行ID
     required String toRowId,  // 目标位置ID
@@ -398,8 +414,12 @@ class DatabaseController {
     );
   }
 
-  /// 移动分组位置
-  /// 用于调整分组顺序（如看板视图中的列顺序）
+  /*
+   * 移动分组位置
+   * 
+   * 用于调整分组顺序，比如看板视图中的列顺序。
+   * 用户可以拖动分组标题来重新排列。
+   */
   Future<FlowyResult<void, FlowyError>> moveGroup({
     required String fromGroupId,  // 要移动的分组ID
     required String toGroupId,  // 目标位置的分组ID
@@ -410,8 +430,12 @@ class DatabaseController {
     );
   }
 
-  /// 更新布局设置
-  /// 根据不同的视图类型更新对应的设置
+  /*
+   * 更新布局设置
+   * 
+   * 根据不同的视图类型更新对应的设置。
+   * 每种视图都有自己特有的设置项。
+   */
   Future<void> updateLayoutSetting({
     BoardLayoutSettingPB? boardLayoutSetting,  // 看板布局设置
     CalendarLayoutSettingPB? calendarLayoutSetting,  // 日历布局设置

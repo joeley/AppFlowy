@@ -262,59 +262,91 @@ class RowCache {
     }
   }
 
+  /*
+   * 删除行（内部方法）
+   * 
+   * 遍历要删除的行 ID 列表，逐个移除并通知变化。
+   */
   void _deleteRows(List<RowId> deletedRowIds) {
     for (final rowId in deletedRowIds) {
+      // 从列表中移除行
       final deletedRow = _rowList.remove(rowId);
       if (deletedRow != null) {
+        // 通知监听者行已删除
         _changedNotifier?.receive(ChangedReason.delete(deletedRow));
       }
     }
   }
 
+  /*
+   * 插入行（内部方法）
+   * 
+   * 在指定位置插入新行，并收集成功插入的索引。
+   */
   void _insertRows(List<InsertedRowPB> insertRows) {
-    final InsertedIndexs insertedIndices = [];
+    final InsertedIndexs insertedIndices = [];  // 收集插入成功的索引
     for (final insertedRow in insertRows) {
+      // 检查是否有指定插入位置
       if (insertedRow.hasIndex()) {
+        // 在指定位置插入新行
         final index = _rowList.insert(
           insertedRow.index,
           buildGridRow(insertedRow.rowMeta),
         );
         if (index != null) {
-          insertedIndices.add(index);
+          insertedIndices.add(index);  // 记录成功插入的位置
         }
       }
     }
+    // 通知所有插入操作完成
     _changedNotifier?.receive(ChangedReason.insert(insertedIndices));
   }
 
+  /*
+   * 更新行（内部方法）
+   * 
+   * 处理行数据更新，包括清理受影响的单元格缓存。
+   */
   void _updateRows(List<UpdatedRowPB> updatedRows) {
-    if (updatedRows.isEmpty) return;
-    final List<RowMetaPB> updatedList = [];
+    if (updatedRows.isEmpty) return;  // 空列表直接返回
+    
+    final List<RowMetaPB> updatedList = [];  // 收集需要更新的行元数据
     for (final updatedRow in updatedRows) {
+      // 清理受影响字段的单元格缓存
       for (final fieldId in updatedRow.fieldIds) {
         final key = CellContext(
           fieldId: fieldId,
           rowId: updatedRow.rowId,
         );
-        _cellMemCache.remove(key);
+        _cellMemCache.remove(key);  // 删除旧的缓存数据
       }
+      // 如果有行元数据，添加到更新列表
       if (updatedRow.hasRowMeta()) {
         updatedList.add(updatedRow.rowMeta);
       }
     }
 
+    // 批量更新行数据
     final updatedIndexs = _rowList.updateRows(
       rowMetas: updatedList,
       builder: (rowId) => buildGridRow(rowId),
     );
 
+    // 如果有更新，通知监听者
     if (updatedIndexs.isNotEmpty) {
       _changedNotifier?.receive(ChangedReason.update(updatedIndexs));
     }
   }
 
+  /*
+   * 隐藏行（内部方法）
+   * 
+   * 由于过滤器条件，临时隐藏不符合条件的行。
+   * 注意：隐藏不等于删除，数据仍然存在。
+   */
   void _hideRows(List<RowId> invisibleRows) {
     for (final rowId in invisibleRows) {
+      // 从可见列表中移除，但数据仍在后端
       final deletedRow = _rowList.remove(rowId);
       if (deletedRow != null) {
         _changedNotifier?.receive(ChangedReason.delete(deletedRow));
