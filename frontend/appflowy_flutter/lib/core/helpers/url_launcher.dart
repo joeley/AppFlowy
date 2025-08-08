@@ -13,12 +13,27 @@ import 'package:string_validator/string_validator.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:url_launcher/url_launcher.dart' as launcher;
 
+/// 失败回调类型
 typedef OnFailureCallback = void Function(Uri uri);
 
-/// Launch the uri
-///
-/// If the uri is a local file path, it will be opened with the OpenFilex.
-/// Otherwise, it will be launched with the url_launcher.
+/// 启动URI
+/// 
+/// 智能处理不同类型的URI：
+/// - 本地文件路径：使用OpenFilex打开
+/// - 网络链接：使用url_launcher打开
+/// 
+/// 参数：
+/// - [uri]: 要打开的URI
+/// - [context]: 上下文，用于显示Toast
+/// - [onFailure]: 失败回调
+/// - [mode]: 启动模式
+/// - [webOnlyWindowName]: Web平台窗口名称
+/// - [addingHttpSchemeWhenFailed]: 失败时是否添加http协议
+/// 
+/// 设计思想：
+/// - 区分本地文件和网络链接
+/// - 自动添加缺失的HTTP协议
+/// - 处理各平台的差异
 Future<bool> afLaunchUri(
   Uri uri, {
   BuildContext? context,
@@ -30,7 +45,7 @@ Future<bool> afLaunchUri(
   final url = uri.toString();
   final decodedUrl = Uri.decodeComponent(url);
 
-  // check if the uri is the local file path
+  // 检查是否为本地文件路径
   if (localPathRegex.hasMatch(decodedUrl)) {
     return _afLaunchLocalUri(
       uri,
@@ -39,7 +54,7 @@ Future<bool> afLaunchUri(
     );
   }
 
-  // on Linux or Android or Windows, add http scheme to the url if it is not present
+  // 在Linux、Android或Windows上，如果URL没有协议，添加https协议
   if ((UniversalPlatform.isLinux ||
           UniversalPlatform.isAndroid ||
           UniversalPlatform.isWindows) &&
@@ -47,10 +62,10 @@ Future<bool> afLaunchUri(
     uri = Uri.parse('https://$url');
   }
 
-  /// opening an incorrect link will cause a system error dialog to pop up on macOS
-  /// only use [canLaunchUrl] on macOS
-  /// and there is an known issue with url_launcher on Linux where it fails to launch
-  /// see https://github.com/flutter/flutter/issues/88463
+  /// 在macOS上打开错误链接会弹出系统错误对话框
+  /// 只在macOS上使用[canLaunchUrl]检查
+  /// Linux上存在已知问题，url_launcher可能启动失败
+  /// 参考：https://github.com/flutter/flutter/issues/88463
   bool result = true;
   if (UniversalPlatform.isMacOS) {
     result = await launcher.canLaunchUrl(uri);
@@ -58,7 +73,7 @@ Future<bool> afLaunchUri(
 
   if (result) {
     try {
-      // try to launch the uri directly
+      // 尝试直接启动URI
       result = await launcher.launchUrl(
         uri,
         mode: mode,
@@ -70,8 +85,7 @@ Future<bool> afLaunchUri(
     }
   }
 
-  // if the uri is not a valid url, try to launch it with http scheme
-
+  // 如果URI不是有效的URL，尝试添加http协议后启动
   if (addingHttpSchemeWhenFailed &&
       !result &&
       !isURL(url, {'require_protocol': true})) {
@@ -93,9 +107,11 @@ Future<bool> afLaunchUri(
   return result;
 }
 
-/// Launch the url string
-///
-/// See [afLaunchUri] for more details.
+/// 启动URL字符串
+/// 
+/// 将字符串转换为URI后启动
+/// 
+/// 参见[afLaunchUri]获取更多细节
 Future<bool> afLaunchUrlString(
   String url, {
   bool addingHttpSchemeWhenFailed = false,
@@ -110,7 +126,7 @@ Future<bool> afLaunchUrlString(
     return false;
   }
 
-  // try to launch the uri directly
+  // 调用afLaunchUri处理URI
   return afLaunchUri(
     uri,
     addingHttpSchemeWhenFailed: addingHttpSchemeWhenFailed,
@@ -119,23 +135,30 @@ Future<bool> afLaunchUrlString(
   );
 }
 
-/// Launch the local uri
-///
-/// See [afLaunchUri] for more details.
+/// 启动本地URI
+/// 
+/// 使用OpenFilex打开本地文件或文件夹
+/// 
+/// 功能：
+/// 1. 尝试打开文件
+/// 2. 如果文件无法打开，回退到打开所在文件夹
+/// 3. 显示操作结果Toast
+/// 
+/// 参见[afLaunchUri]获取更多细节
 Future<bool> _afLaunchLocalUri(
   Uri uri, {
   BuildContext? context,
   OnFailureCallback? onFailure,
 }) async {
   final decodedUrl = Uri.decodeComponent(uri.toString());
-  // open the file with the OpenfileX
+  // 使用OpenFileX打开文件
   var result = await OpenFilex.open(decodedUrl);
   if (result.type != ResultType.done) {
-    // For the file cant be opened, fallback to open the folder
+    // 文件无法打开，回退到打开父文件夹
     final parentFolder = Directory(decodedUrl).parent.path;
     result = await OpenFilex.open(parentFolder);
   }
-  // show the toast if the file is not found
+  // 根据结果显示Toast消息
   final message = switch (result.type) {
     ResultType.done => LocaleKeys.openFileMessage_success.tr(),
     ResultType.fileNotFound => LocaleKeys.openFileMessage_fileNotFound.tr(),
@@ -160,6 +183,15 @@ Future<bool> _afLaunchLocalUri(
   return openFileSuccess;
 }
 
+/// 错误处理器
+/// 
+/// 处理URI启动失败的情况
+/// 
+/// 参数：
+/// - [uri]: 失败的URI
+/// - [context]: 上下文
+/// - [onFailure]: 失败回调
+/// - [e]: 平台异常
 void _errorHandler(
   Uri uri, {
   BuildContext? context,
@@ -169,8 +201,10 @@ void _errorHandler(
   Log.error('Failed to open uri: $e');
 
   if (onFailure != null) {
+    // 调用自定义失败处理
     onFailure(uri);
   } else {
+    // 显示默认错误消息
     showMessageToast(
       LocaleKeys.failedToOpenUrl.tr(args: [e?.message ?? "PlatformException"]),
       context: context,

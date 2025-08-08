@@ -44,7 +44,7 @@ import 'tasks/file_storage_task.dart';
 // 任务系统的通用导入
 import 'tasks/prelude.dart';
 
-/* 
+/*
  * 全局依赖注入容器实例
  *
  * GetIt是一个服务定位器（Service Locator）模式的实现
@@ -57,7 +57,7 @@ import 'tasks/prelude.dart';
  */
 final getIt = GetIt.instance;
 
-/* 
+/*
  * 应用入口点抽象类
  *
  * 定义了创建应用根Widget的接口
@@ -70,7 +70,7 @@ abstract class EntryPoint {
   Widget create(LaunchConfiguration config);
 }
 
-/* 
+/*
  * 应用运行上下文
  *
  * 保存应用运行时的重要环境信息
@@ -89,7 +89,7 @@ class FlowyRunnerContext {
   final Directory applicationDataDirectory;
 }
 
-/* 
+/*
  * AppFlowy应用的主启动函数
  *
  * 这是从main.dart调用的核心启动函数
@@ -130,7 +130,7 @@ Future<void> runAppFlowy({bool isAnon = false}) async {
   }
 }
 
-/* 
+/*
  * 应用运行器
  *
  * 核心职责：
@@ -153,7 +153,7 @@ class FlowyRunner {
    */
   static var currentMode = integrationMode();
 
-  /* 
+  /*
    * 核心启动方法 - 执行完整的应用初始化流程
    *
    * 这个方法的设计思想：
@@ -319,7 +319,7 @@ class FlowyRunner {
   }
 }
 
-/* 
+/*
  * 初始化依赖注入容器
  *
  * 这个函数负责注册所有全局单例和服务
@@ -371,6 +371,7 @@ Future<void> initGetIt(
 
   // 插件沙箱：管理和隔离插件运行环境
   getIt.registerSingleton<PluginSandbox>(PluginSandbox());
+
   // 视图展开注册表：管理可展开视图的注册
   getIt.registerSingleton<ViewExpanderRegistry>(ViewExpanderRegistry());
   // 链接悬停触发器：处理链接悬停事件
@@ -387,7 +388,7 @@ Future<void> initGetIt(
   await DependencyResolver.resolve(getIt, mode);
 }
 
-/* 
+/*
  * 启动上下文
  *
  * 保存启动过程中需要的所有信息
@@ -407,7 +408,7 @@ enum LaunchTaskType {
   appLauncher,     // 应用启动任务：UI初始化、服务启动等
 }
 
-/* 
+/*
  * 启动任务基类
  *
  * The interface of an app launch task, which will trigger
