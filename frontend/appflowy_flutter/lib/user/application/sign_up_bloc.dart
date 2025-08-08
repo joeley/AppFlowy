@@ -18,37 +18,62 @@ class SignUpBloc extends Bloc<SignUpEvent, SignUpState> {
 
   final AuthService authService;
 
+  /**
+   * 事件分发器 - 注册所有事件处理器
+   * 
+   * 使用map模式匹配来处理不同类型的事件。
+   * 每个事件都对应一个用户操作或UI交互。
+   * 
+   * 注册的事件处理器：
+   * 1. signUpWithUserEmailAndPassword - 执行注册操作
+   * 2. emailChanged - 邮箱输入变化
+   * 3. passwordChanged - 密码输入变化  
+   * 4. repeatPasswordChanged - 确认密码输入变化
+   */
   void _dispatch() {
     on<SignUpEvent>(
       (event, emit) async {
         await event.map(
+          /* 用户点击注册按钮事件
+           * 触发完整的注册流程，包括验证和API调用
+           */
           signUpWithUserEmailAndPassword: (e) async {
             await _performActionOnSignUp(emit);
           },
+          /* 邮箱输入框内容变化事件
+           * 实时更新状态，清除之前的错误信息
+           * 为用户提供流畅的输入体验
+           */
           emailChanged: (_EmailChanged value) async {
             emit(
               state.copyWith(
-                email: value.email,
-                emailError: null,
-                successOrFail: null,
+                email: value.email,  // 更新邮箱值
+                emailError: null,    // 清除邮箱错误
+                successOrFail: null, // 重置操作结果
               ),
             );
           },
+          /* 密码输入框内容变化事件
+           * 实时更新密码状态，清除相关错误信息
+           */
           passwordChanged: (_PasswordChanged value) async {
             emit(
               state.copyWith(
-                password: value.password,
-                passwordError: null,
-                successOrFail: null,
+                password: value.password, // 更新密码值
+                passwordError: null,      // 清除密码错误
+                successOrFail: null,      // 重置操作结果
               ),
             );
           },
+          /* 确认密码输入框内容变化事件
+           * 这是注册页面特有的功能，确保密码输入一致性
+           */
           repeatPasswordChanged: (_RepeatPasswordChanged value) async {
             emit(
               state.copyWith(
-                repeatedPassword: value.password,
-                repeatPasswordError: null,
-                successOrFail: null,
+                repeatedPassword: value.password, // 更新确认密码值
+                repeatPasswordError: null,        // 清除确认密码错误
+                successOrFail: null,              // 重置操作结果
               ),
             );
           },
