@@ -1,3 +1,30 @@
+/*
+ * AI写作助手块组件
+ * 
+ * 设计理念：
+ * 提供在文档中嵌入AI写作助手的功能，帮助用户生成、优化和改写文本。
+ * 通过提示词输入和AI建议，实现智能写作辅助。
+ * 
+ * 核心功能：
+ * 1. 提示词输入界面
+ * 2. AI文本生成
+ * 3. 建议预览和应用
+ * 4. 多种写作命令支持
+ * 
+ * 命令类型：
+ * - 继续写作
+ * - 改进文本
+ * - 总结内容
+ * - 调整语气
+ * - 翻译文本
+ * 
+ * 使用场景：
+ * - 内容创作
+ * - 文本优化
+ * - 语言翻译
+ * - 摘要生成
+ */
+
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -18,25 +45,45 @@ import 'operations/ai_writer_node_extension.dart';
 import 'widgets/ai_writer_suggestion_actions.dart';
 import 'widgets/ai_writer_prompt_input_more_button.dart';
 
+/*
+ * AI写作块键值常量
+ * 
+ * 定义AI写作块的属性键名，用于存储和识别块状态。
+ */
 class AiWriterBlockKeys {
   const AiWriterBlockKeys._();
 
-  static const String type = 'ai_writer';
+  static const String type = 'ai_writer';  /* 块类型标识 */
 
-  static const String isInitialized = 'is_initialized';
-  static const String selection = 'selection';
-  static const String command = 'command';
+  static const String isInitialized = 'is_initialized';  /* 初始化状态 */
+  static const String selection = 'selection';  /* 选中区域 */
+  static const String command = 'command';  /* AI命令类型 */
 
-  /// Sample usage:
-  ///
-  /// `attributes: {
-  ///   'ai_writer_delta_suggestion': 'original'
-  /// }`
+  /*
+   * 建议属性
+   * 
+   * 示例：
+   * attributes: {
+   *   'ai_writer_delta_suggestion': 'original'  // 原始文本
+   * }
+   */
   static const String suggestion = 'ai_writer_delta_suggestion';
-  static const String suggestionOriginal = 'original';
-  static const String suggestionReplacement = 'replacement';
+  static const String suggestionOriginal = 'original';  /* 原始内容 */
+  static const String suggestionReplacement = 'replacement';  /* 替换内容 */
 }
 
+/*
+ * 创建AI写作节点
+ * 
+ * 功能：
+ * 构建AI写作块的节点对象。
+ * 
+ * 参数：
+ * - selection：当前选中区域
+ * - command：AI命令类型
+ * 
+ * 返回：配置好属性的AI写作节点
+ */
 Node aiWriterNode({
   required Selection? selection,
   required AiWriterCommand command,
@@ -44,13 +91,21 @@ Node aiWriterNode({
   return Node(
     type: AiWriterBlockKeys.type,
     attributes: {
-      AiWriterBlockKeys.isInitialized: false,
-      AiWriterBlockKeys.selection: selection?.toJson(),
-      AiWriterBlockKeys.command: command.index,
+      AiWriterBlockKeys.isInitialized: false,  /* 未初始化状态 */
+      AiWriterBlockKeys.selection: selection?.toJson(),  /* 保存选区 */
+      AiWriterBlockKeys.command: command.index,  /* 保存命令 */
     },
   );
 }
 
+/*
+ * AI写作块构建器
+ * 
+ * 职责：
+ * 1. 构建AI写作块组件
+ * 2. 验证节点有效性
+ * 3. 配置操作按钮
+ */
 class AIWriterBlockComponentBuilder extends BlockComponentBuilder {
   AIWriterBlockComponentBuilder();
 
@@ -61,10 +116,12 @@ class AIWriterBlockComponentBuilder extends BlockComponentBuilder {
       key: node.key,
       node: node,
       showActions: showActions(node),
+      /* 构建操作按钮 */
       actionBuilder: (context, state) => actionBuilder(
         blockComponentContext,
         state,
       ),
+      /* 构建尾部操作 */
       actionTrailingBuilder: (context, state) => actionTrailingBuilder(
         blockComponentContext,
         state,
@@ -72,6 +129,15 @@ class AIWriterBlockComponentBuilder extends BlockComponentBuilder {
     );
   }
 
+  /*
+   * 验证节点
+   * 
+   * 检查条件：
+   * - 无子节点
+   * - 必须有isInitialized属性
+   * - 可选的selection属性
+   * - 必须有command属性
+   */
   @override
   BlockComponentValidate get validate => (node) =>
       node.children.isEmpty &&
@@ -80,6 +146,18 @@ class AIWriterBlockComponentBuilder extends BlockComponentBuilder {
       node.attributes[AiWriterBlockKeys.command] is int;
 }
 
+/*
+ * AI写作块组件
+ * 
+ * 功能：
+ * 显示AI写作助手界面，处理用户输入和AI响应。
+ * 
+ * 特性：
+ * - 悬浮输入框
+ * - 实时预览
+ * - 操作按钮
+ * - 移动端隐藏
+ */
 class AiWriterBlockComponent extends BlockComponentStatefulWidget {
   const AiWriterBlockComponent({
     super.key,
@@ -94,18 +172,28 @@ class AiWriterBlockComponent extends BlockComponentStatefulWidget {
   State<AiWriterBlockComponent> createState() => _AIWriterBlockComponentState();
 }
 
+/*
+ * AI写作块状态
+ * 
+ * 管理：
+ * - 提示词输入
+ * - 悬浮层显示
+ * - 焦点控制
+ * - 生命周期
+ */
 class _AIWriterBlockComponentState extends State<AiWriterBlockComponent> {
-  final textController = AiPromptInputTextEditingController();
-  final overlayController = OverlayPortalController();
-  final layerLink = LayerLink();
-  final focusNode = FocusNode();
+  final textController = AiPromptInputTextEditingController();  /* 提示词输入控制器 */
+  final overlayController = OverlayPortalController();  /* 悬浮层控制器 */
+  final layerLink = LayerLink();  /* 图层链接 */
+  final focusNode = FocusNode();  /* 焦点节点 */
 
-  late final editorState = context.read<EditorState>();
+  late final editorState = context.read<EditorState>();  /* 编辑器状态 */
 
   @override
   void initState() {
     super.initState();
 
+    /* 在下一帧显示悬浮层和注册节点 */
     WidgetsBinding.instance.addPostFrameCallback((_) {
       overlayController.show();
       context.read<AiWriterCubit>().register(widget.node);
@@ -114,6 +202,7 @@ class _AIWriterBlockComponentState extends State<AiWriterBlockComponent> {
 
   @override
   void dispose() {
+    /* 清理资源 */
     textController.dispose();
     focusNode.dispose();
     super.dispose();
@@ -121,6 +210,7 @@ class _AIWriterBlockComponentState extends State<AiWriterBlockComponent> {
 
   @override
   Widget build(BuildContext context) {
+    /* 移动端不显示AI写作块 */
     if (UniversalPlatform.isMobile) {
       return const SizedBox.shrink();
     }
