@@ -41,7 +41,7 @@ enum ShortcutsStatus {
 }
 
 class ShortcutsCubit extends Cubit<ShortcutsState> {
-  ShortcutsCubit(this.service) : super(const ShortcutsState());
+  ShortcutsCubit(this.service) : super(const ShortcutsState()); // 使用默认的空状态初始化
 
   final SettingsShortcutService service;
 

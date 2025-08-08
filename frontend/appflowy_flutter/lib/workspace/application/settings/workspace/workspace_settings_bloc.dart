@@ -13,7 +13,7 @@ part 'workspace_settings_bloc.freezed.dart';
 
 class WorkspaceSettingsBloc
     extends Bloc<WorkspaceSettingsEvent, WorkspaceSettingsState> {
-  WorkspaceSettingsBloc() : super(WorkspaceSettingsState.initial()) {
+  WorkspaceSettingsBloc() : super(WorkspaceSettingsState.initial()) { // 使用初始状态
     on<WorkspaceSettingsEvent>(
       (event, emit) async {
         await event.when(
@@ -148,5 +148,6 @@ class WorkspaceSettingsState with _$WorkspaceSettingsState {
     @Default(false) bool leaveWorkspace,
   }) = _WorkspaceSettingsState;
 
+  /// 创建初始状态
   factory WorkspaceSettingsState.initial() => const WorkspaceSettingsState();
 }

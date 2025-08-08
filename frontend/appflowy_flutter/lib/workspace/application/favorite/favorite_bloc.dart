@@ -12,7 +12,7 @@ import 'favorite_listener.dart';
 part 'favorite_bloc.freezed.dart';
 
 class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
-  FavoriteBloc() : super(FavoriteState.initial()) {
+  FavoriteBloc() : super(FavoriteState.initial()) { // 使用初始状态
     _dispatch();
   }
 
