@@ -19,6 +19,21 @@ import 'package:styled_widget/styled_widget.dart';
 import 'application/trash_bloc.dart';
 import 'src/trash_cell.dart';
 
+/*
+ * 垃圾桶页面组件
+ * 
+ * 核心功能：
+ * 1. 显示所有已删除的文档和页面
+ * 2. 提供批量恢复/删除操作
+ * 3. 单项恢复/永久删除
+ * 4. 响应式列表布局
+ * 
+ * 用户体验：
+ * - 清晰的列表展示
+ * - 二次确认防误删
+ * - 固定表头方便浏览
+ * - 水平滚动支持
+ */
 class TrashPage extends StatefulWidget {
   const TrashPage({super.key});
 
@@ -37,17 +52,18 @@ class _TrashPageState extends State<TrashPage> {
 
   @override
   Widget build(BuildContext context) {
-    const horizontalPadding = 80.0;
+    const horizontalPadding = 80.0;  /* 左右边距，保证内容居中 */
     return BlocProvider(
+      /* 创建TrashBloc并立即加载垃圾桶数据 */
       create: (context) => getIt<TrashBloc>()..add(const TrashEvent.initial()),
       child: BlocBuilder<TrashBloc, TrashState>(
         builder: (context, state) {
           return SizedBox.expand(
             child: Column(
               children: [
-                _renderTopBar(context, state),
+                _renderTopBar(context, state),    /* 顶部操作栏 */
                 const VSpace(32),
-                _renderTrashList(context, state),
+                _renderTrashList(context, state), /* 垃圾桶列表 */
               ],
             ).padding(horizontal: horizontalPadding, vertical: 48),
           );
@@ -56,8 +72,20 @@ class _TrashPageState extends State<TrashPage> {
     );
   }
 
+  /*
+   * 渲染垃圾桶列表
+   * 
+   * 布局结构：
+   * - 外层：垂直滚动条
+   * - 内层：水平滚动支持
+   * - 使用CustomScrollView实现固定表头
+   * 
+   * Sliver组成：
+   * - SliverPersistentHeader：固定表头
+   * - SliverList：数据列表
+   */
   Widget _renderTrashList(BuildContext context, TrashState state) {
-    const barSize = 6.0;
+    const barSize = 6.0;  /* 滚动条宽度 */
     return Expanded(
       child: ScrollbarListStack(
         axis: Axis.vertical,
@@ -66,7 +94,7 @@ class _TrashPageState extends State<TrashPage> {
         barSize: barSize,
         child: StyledSingleChildScrollView(
           barSize: barSize,
-          axis: Axis.horizontal,
+          axis: Axis.horizontal,  /* 支持水平滚动 */
           child: SizedBox(
             width: TrashSizes.totalWidth,
             child: ScrollConfiguration(
@@ -76,8 +104,8 @@ class _TrashPageState extends State<TrashPage> {
                 physics: StyledScrollPhysics(),
                 controller: _scrollController,
                 slivers: [
-                  _renderListHeader(context, state),
-                  _renderListBody(context, state),
+                  _renderListHeader(context, state),  /* 固定表头 */
+                  _renderListBody(context, state),    /* 数据列表 */
                 ],
               ),
             ),
@@ -87,18 +115,36 @@ class _TrashPageState extends State<TrashPage> {
     );
   }
 
+  /*
+   * 渲染顶部操作栏
+   * 
+   * 包含元素：
+   * 1. 标题："垃圾桶"
+   * 2. 全部恢复按钮
+   * 3. 全部删除按钮
+   * 
+   * 安全机制：
+   * - 两个批量操作都需要二次确认
+   * - 防止误操作导致数据丢失
+   * 
+   * UI细节：
+   * - IntrinsicWidth保证按钮宽度自适应
+   * - 图标+文本的组合提高识别度
+   */
   Widget _renderTopBar(BuildContext context, TrashState state) {
     return SizedBox(
       height: 36,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          /* 页面标题 */
           FlowyText.semibold(
             LocaleKeys.trash_text.tr(),
             fontSize: FontSizes.s16,
             color: Theme.of(context).colorScheme.tertiary,
           ),
           const Spacer(),
+          /* 全部恢复按钮 */
           IntrinsicWidth(
             child: FlowyButton(
               text: FlowyText.medium(
@@ -118,6 +164,7 @@ class _TrashPageState extends State<TrashPage> {
             ),
           ),
           const HSpace(6),
+          /* 全部删除按钮 */
           IntrinsicWidth(
             child: FlowyButton(
               text: FlowyText.medium(
@@ -139,23 +186,52 @@ class _TrashPageState extends State<TrashPage> {
     );
   }
 
+  /*
+   * 渲染列表表头
+   * 
+   * 特性：
+   * - floating: true - 滚动时可以浮动显示
+   * - pinned: true - 始终固定在顶部
+   * 
+   * 使用SliverPersistentHeader实现固定表头
+   * 用户滚动时表头始终可见
+   */
   Widget _renderListHeader(BuildContext context, TrashState state) {
     return SliverPersistentHeader(
       delegate: TrashHeaderDelegate(),
-      floating: true,
-      pinned: true,
+      floating: true,  /* 浮动表头 */
+      pinned: true,    /* 固定表头 */
     );
   }
 
+  /*
+   * 渲染列表主体
+   * 
+   * 使用SliverList动态构建列表项
+   * 
+   * 每个列表项功能：
+   * 1. 显示删除项信息
+   * 2. 恢复按钮 - 恢复到原位置
+   * 3. 删除按钮 - 永久删除
+   * 
+   * 安全特性：
+   * - 恢复和删除都需要二次确认
+   * - 空名称时显示默认名称
+   * 
+   * 性能优化：
+   * - addAutomaticKeepAlives: false
+   * - 避免不必要的Widget缓存
+   */
   Widget _renderListBody(BuildContext context, TrashState state) {
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (BuildContext context, int index) {
           final object = state.objects[index];
           return SizedBox(
-            height: 42,
+            height: 42,  /* 固定行高 */
             child: TrashCell(
               object: object,
+              /* 恢复操作：将项目恢复到原位置 */
               onRestore: () => showCancelAndConfirmDialog(
                 context: context,
                 title:
@@ -166,6 +242,7 @@ class _TrashPageState extends State<TrashPage> {
                     .read<TrashBloc>()
                     .add(TrashEvent.putback(object.id)),
               ),
+              /* 永久删除操作：不可恢复 */
               onDelete: () => showConfirmDeletionDialog(
                 context: context,
                 name: object.name.trim().isEmpty
@@ -180,7 +257,7 @@ class _TrashPageState extends State<TrashPage> {
           );
         },
         childCount: state.objects.length,
-        addAutomaticKeepAlives: false,
+        addAutomaticKeepAlives: false,  /* 性能优化 */
       ),
     );
   }

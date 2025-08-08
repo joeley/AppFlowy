@@ -23,15 +23,29 @@ import 'package:universal_platform/universal_platform.dart';
 
 part 'appearance_cubit.freezed.dart';
 
-/// [AppearanceSettingsCubit] is used to modify the appearance of AppFlowy.
-/// It includes:
-/// - [AppTheme]
-/// - [ThemeMode]
-/// - [TextStyle]'s
-/// - [Locale]
-/// - [UserDateFormatPB]
-/// - [UserTimeFormatPB]
-///
+/*
+ * 外观设置管理器
+ * 
+ * 核心职责：
+ * 管理AppFlowy的所有外观相关设置
+ * 
+ * 管理内容：
+ * - 主题样式 (AppTheme)
+ * - 明暗模式 (ThemeMode)
+ * - 字体样式 (TextStyle)
+ * - 语言设置 (Locale)
+ * - 日期格式 (UserDateFormatPB)
+ * - 时间格式 (UserTimeFormatPB)
+ * - 文档编辑器颜色（光标、选中）
+ * - 菜单折叠状态
+ * - RTL布局支持
+ * 
+ * 设计特点：
+ * - 使用Cubit状态管理
+ * - 持久化到后端服务
+ * - 支持实时响应
+ * - 跨设备同步（部分设置）
+ */
 class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
   AppearanceSettingsCubit(
     AppearanceSettingsPB appearanceSettings,
@@ -53,11 +67,13 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
             dateTimeSettings.dateFormat,
             dateTimeSettings.timeFormat,
             dateTimeSettings.timezoneId,
+            /* 处理文档光标颜色：空字符串表示使用默认值 */
             appearanceSettings.documentSetting.cursorColor.isEmpty
                 ? null
                 : Color(
                     int.parse(appearanceSettings.documentSetting.cursorColor),
                   ),
+            /* 处理文档选中颜色：空字符串表示使用默认值 */
             appearanceSettings.documentSetting.selectionColor.isEmpty
                 ? null
                 : Color(
@@ -65,24 +81,38 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
                       appearanceSettings.documentSetting.selectionColor,
                     ),
                   ),
-            1.0,
+            1.0, /* 默认文本缩放因子 */
           ),
         ) {
+    /* 初始化时读取本地存储的文本缩放因子 */
     readTextScaleFactor();
   }
 
+  /* 外观设置数据对象 */
   final AppearanceSettingsPB _appearanceSettings;
+  /* 日期时间设置数据对象 */
   final DateTimeSettingsPB _dateTimeSettings;
 
+  /*
+   * 设置文本缩放因子
+   * 
+   * 特点：
+   * - 仅存储在本地，不跨设备同步
+   * - 限制范围：0.7-1.0
+   * - 超过1.0会导致UI问题
+   * 
+   * 应用场景：
+   * - 适应不同显示器尺寸
+   * - 辅助老年用户或视力障碍用户
+   */
   Future<void> setTextScaleFactor(double textScaleFactor) async {
-    // only saved in local storage, this value is not synced across devices
+    /* 保存到本地存储 */
     await getIt<KeyValueStorage>().set(
       KVKeys.textScaleFactor,
       textScaleFactor.toString(),
     );
 
-    // don't allow the text scale factor to be greater than 1.0, it will cause
-    // ui issues
+    /* 限制缩放范围，避免破坏UI布局 */
     emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.0)));
   }
 
@@ -95,8 +125,22 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.0)));
   }
 
-  /// Update selected theme in the user's settings and emit an updated state
-  /// with the AppTheme named [themeName].
+  /*
+   * 设置应用主题
+   * 
+   * 功能：
+   * 1. 更新用户设置中的主题名称
+   * 2. 加载对应的主题资源
+   * 3. 应用新主题到UI
+   * 
+   * 错误处理：
+   * - 主题加载失败时记录日志
+   * - macOS平台显示错误通知
+   * 
+   * 异步保存：
+   * - 使用unawaited避免阻塞UI
+   * - 后台保存到服务器
+   */
   Future<void> setTheme(String themeName) async {
     _appearanceSettings.theme = themeName;
     unawaited(_saveAppearanceSettings());
@@ -119,18 +163,25 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
   Future<void> resetTheme() =>
       setTheme(DefaultAppearanceSettings.kDefaultThemeName);
 
-  /// Update the theme mode in the user's settings and emit an updated state.
+  /*
+   * 设置主题模式（明/暗/跟随系统）
+   * 
+   * 支持模式：
+   * - light：明亮模式
+   * - dark：暗黑模式
+   * - system：跟随系统设置
+   */
   void setThemeMode(ThemeMode themeMode) {
     _appearanceSettings.themeMode = _themeModeToPB(themeMode);
     _saveAppearanceSettings();
     emit(state.copyWith(themeMode: themeMode));
   }
 
-  /// Resets the current brightness setting
+  /* 重置主题模式到默认值 */
   void resetThemeMode() =>
       setThemeMode(DefaultAppearanceSettings.kDefaultThemeMode);
 
-  /// Toggle the theme mode
+  /* 快速切换明暗模式 */
   void toggleThemeMode() {
     final currentThemeMode = state.themeMode;
     setThemeMode(
@@ -138,77 +189,121 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     );
   }
 
+  /*
+   * 设置布局方向（LTR/RTL）
+   * 用于支持从右到左的语言（如阿拉伯语、希伯来语）
+   */
   void setLayoutDirection(LayoutDirection layoutDirection) {
     _appearanceSettings.layoutDirection = layoutDirection.toLayoutDirectionPB();
     _saveAppearanceSettings();
     emit(state.copyWith(layoutDirection: layoutDirection));
   }
 
+  /*
+   * 设置文本方向
+   * - ltr：从左到右
+   * - rtl：从右到左
+   * - auto：自动检测
+   */
   void setTextDirection(AppFlowyTextDirection textDirection) {
     _appearanceSettings.textDirection = textDirection.toTextDirectionPB();
     _saveAppearanceSettings();
     emit(state.copyWith(textDirection: textDirection));
   }
 
+  /*
+   * 启用/禁用RTL工具栏项
+   * 控制编辑器工具栏是否显示RTL相关按钮
+   */
   void setEnableRTLToolbarItems(bool value) {
     _appearanceSettings.enableRtlToolbarItems = value;
     _saveAppearanceSettings();
     emit(state.copyWith(enableRtlToolbarItems: value));
   }
 
-  /// Update selected font in the user's settings and emit an updated state
-  /// with the font name.
+  /*
+   * 设置字体家族
+   * 
+   * 影响范围：
+   * - 整个应用的显示字体
+   * - 文档编辑器的默认字体
+   * 
+   * 注意：字体需要系统已安装
+   */
   void setFontFamily(String fontFamilyName) {
     _appearanceSettings.font = fontFamilyName;
     _saveAppearanceSettings();
     emit(state.copyWith(font: fontFamilyName));
   }
 
-  /// Resets the current font family for the user preferences
+  /* 重置字体到默认值 */
   void resetFontFamily() =>
       setFontFamily(DefaultAppearanceSettings.kDefaultFontFamily);
 
-  /// Update document cursor color in the appearance settings and emit an updated state.
+  /*
+   * 设置文档编辑器光标颜色
+   * 
+   * 作用：自定义输入光标的颜色
+   * 存储：转换为十六进制字符串
+   */
   void setDocumentCursorColor(Color color) {
     _appearanceSettings.documentSetting.cursorColor = color.toHexString();
     _saveAppearanceSettings();
     emit(state.copyWith(documentCursorColor: color));
   }
 
-  /// Reset document cursor color in the appearance settings
+  /* 重置光标颜色到默认值 */
   void resetDocumentCursorColor() {
     _appearanceSettings.documentSetting.cursorColor = '';
     _saveAppearanceSettings();
     emit(state.copyWith(documentCursorColor: null));
   }
 
-  /// Update document selection color in the appearance settings and emit an updated state.
+  /*
+   * 设置文档编辑器选中颜色
+   * 
+   * 作用：自定义文本选中时的背景颜色
+   * 提升可读性和个性化体验
+   */
   void setDocumentSelectionColor(Color color) {
     _appearanceSettings.documentSetting.selectionColor = color.toHexString();
     _saveAppearanceSettings();
     emit(state.copyWith(documentSelectionColor: color));
   }
 
-  /// Reset document selection color in the appearance settings
+  /* 重置选中颜色到默认值 */
   void resetDocumentSelectionColor() {
     _appearanceSettings.documentSetting.selectionColor = '';
     _saveAppearanceSettings();
     emit(state.copyWith(documentSelectionColor: null));
   }
 
-  /// Updates the current locale and notify the listeners the locale was
-  /// changed. Fallback to [en] locale if [newLocale] is not supported.
+  /*
+   * 设置应用语言
+   * 
+   * 处理流程：
+   * 1. 验证语言是否支持
+   * 2. 不支持时回退到英文
+   * 3. 更新应用和编辑器的语言
+   * 4. 保存到设置
+   * 
+   * 同步机制：
+   * - 应用全局语言
+   * - 编辑器组件语言
+   * - 后端设置存储
+   */
   void setLocale(BuildContext context, Locale newLocale) {
     if (!context.supportedLocales.contains(newLocale)) {
-      // Log.warn("Unsupported locale: $newLocale, Fallback to locale: en");
+      /* 不支持的语言回退到英文 */
       newLocale = const Locale('en', 'US');
     }
 
+    /* 更新全局语言设置 */
     context.setLocale(newLocale).catchError((e) {
       Log.warn('Catch error in setLocale: $e}');
     });
 
-    // Sync the app's locale with the editor (initialization and update)
+    /* 同步编辑器组件的语言 */
     AppFlowyEditorLocalizations.load(newLocale);
 
     if (state.locale != newLocale) {
@@ -219,20 +314,37 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     }
   }
 
-  // Saves the menus current visibility
+  /*
+   * 保存菜单折叠状态
+   * 记录侧边栏是否折叠，下次启动时恢复
+   */
   void saveIsMenuCollapsed(bool collapsed) {
     _appearanceSettings.isMenuCollapsed = collapsed;
     _saveAppearanceSettings();
   }
 
-  // Saves the current resize offset of the menu
+  /*
+   * 保存菜单宽度偏移量
+   * 记录用户调整的侧边栏宽度
+   */
   void saveMenuOffset(double offset) {
     _appearanceSettings.menuOffset = offset;
     _saveAppearanceSettings();
   }
 
-  /// Saves key/value setting to disk.
-  /// Removes the key if the passed in value is null
+  /*
+   * 通用键值对存储
+   * 
+   * 功能：
+   * - 保存任意键值对设置
+   * - 值为null时删除该键
+   * - 支持扩展新设置项
+   * 
+   * 使用场景：
+   * - 插件自定义设置
+   * - 实验性功能配置
+   * - 临时用户偏好
+   */
   void setKeyValue(String key, String? value) {
     if (key.isEmpty) {
       Log.warn("The key should not be empty");
@@ -253,6 +365,7 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     _saveAppearanceSettings();
   }
 
+  /* 获取键值对设置 */
   String? getValue(String key) {
     if (key.isEmpty) {
       Log.warn("The key should not be empty");
@@ -261,16 +374,27 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     return _appearanceSettings.settingKeyValue[key];
   }
 
-  /// Called when the application launches.
-  /// Uses the device locale when the application is opened for the first time.
+  /*
+   * 应用启动时读取语言设置
+   * 
+   * 逻辑：
+   * 1. 首次启动：使用设备语言
+   * 2. 非首次启动：使用保存的语言
+   * 
+   * resetToDefault标志：
+   * - true：需要重置到设备默认语言
+   * - false：使用用户设置的语言
+   */
   void readLocaleWhenAppLaunch(BuildContext context) {
     if (_appearanceSettings.resetToDefault) {
+      /* 首次启动或重置后，使用设备语言 */
       _appearanceSettings.resetToDefault = false;
       _saveAppearanceSettings();
       setLocale(context, context.deviceLocale);
       return;
     }
 
+    /* 使用保存的语言设置 */
     setLocale(context, state.locale);
   }
 
@@ -286,6 +410,10 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     emit(state.copyWith(timeFormat: format));
   }
 
+  /*
+   * 保存日期时间设置到后端
+   * 包括日期格式、时间格式、时区等
+   */
   Future<void> _saveDateTimeSettings() async {
     final result = await UserSettingsBackendService()
         .setDateTimeSettings(_dateTimeSettings);
@@ -295,6 +423,17 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     );
   }
 
+  /*
+   * 保存外观设置到后端
+   * 
+   * 保存内容：
+   * - 主题、字体、语言
+   * - 文档颜色设置
+   * - 菜单状态
+   * - RTL设置
+   * 
+   * 错误处理：仅记录日志，不影响用户体验
+   */
   Future<void> _saveAppearanceSettings() async {
     final result = await UserSettingsBackendService()
         .setAppearanceSetting(_appearanceSettings);
@@ -328,6 +467,13 @@ ThemeModePB _themeModeToPB(ThemeMode themeMode) {
   }
 }
 
+/*
+ * 布局方向枚举
+ * 
+ * 用于支持不同书写方向的语言：
+ * - ltrLayout：从左到右（大部分语言）
+ * - rtlLayout：从右到左（阿拉伯语、希伯来语等）
+ */
 enum LayoutDirection {
   ltrLayout,
   rtlLayout;
@@ -344,6 +490,18 @@ enum LayoutDirection {
       : LayoutDirectionPB.LTRLayout;
 }
 
+/*
+ * 文本方向枚举
+ * 
+ * 支持三种模式：
+ * - ltr：强制从左到右
+ * - rtl：强制从右到左
+ * - auto：根据内容自动判断
+ * 
+ * auto模式特点：
+ * - 根据首个强方向性字符判断
+ * - 适合混合语言内容
+ */
 enum AppFlowyTextDirection {
   ltr,
   rtl,
@@ -376,6 +534,20 @@ enum AppFlowyTextDirection {
   }
 }
 
+/*
+ * 外观设置状态对象
+ * 
+ * 使用freezed生成不可变对象
+ * 包含所有外观相关的设置项
+ * 
+ * 状态组成：
+ * - 主题相关：appTheme, themeMode
+ * - 文本相关：font, textScaleFactor
+ * - 布局相关：layoutDirection, textDirection, RTL
+ * - 国际化：locale, dateFormat, timeFormat
+ * - UI状态：isMenuCollapsed, menuOffset
+ * - 编辑器颜色：cursorColor, selectionColor
+ */
 @freezed
 class AppearanceSettingsState with _$AppearanceSettingsState {
   const AppearanceSettingsState._();

@@ -24,6 +24,25 @@ import 'package:universal_platform/universal_platform.dart';
 
 import 'widgets/search_ask_ai_entrance.dart';
 
+/*
+ * 命令面板主组件
+ * 
+ * 核心功能：
+ * 1. 全局搜索入口（Cmd/Ctrl + P 快捷键）
+ * 2. 快速导航到任何文档或页面
+ * 3. AI 辅助搜索
+ * 4. 最近查看历史
+ * 
+ * 设计模式：
+ * - InheritedWidget：跨组件树共享状态
+ * - ValueNotifier：状态变化通知
+ * - Controller模式：统一管理显示逻辑
+ * 
+ * 架构特点：
+ * - 可在任何页面通过快捷键唤起
+ * - 悬浮层显示，不影响底层内容
+ * - 支持模糊搜索和智能排序
+ */
 class CommandPalette extends InheritedWidget {
   CommandPalette({
     super.key,
@@ -33,8 +52,10 @@ class CommandPalette extends InheritedWidget {
           child: _CommandPaletteController(notifier: notifier, child: child),
         );
 
+  /* 状态通知器：控制面板开关和数据传递 */
   final ValueNotifier<CommandPaletteNotifierValue> notifier;
 
+  /* 获取最近的CommandPalette实例（必须存在） */
   static CommandPalette of(BuildContext context) {
     final CommandPalette? result =
         context.dependOnInheritedWidgetOfExactType<CommandPalette>();
@@ -44,9 +65,11 @@ class CommandPalette extends InheritedWidget {
     return result!;
   }
 
+  /* 安全获取CommandPalette实例（可能为null） */
   static CommandPalette? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<CommandPalette>();
 
+  /* 切换命令面板显示状态 */
   void toggle({
     UserWorkspaceBloc? workspaceBloc,
     SpaceBloc? spaceBloc,
@@ -59,6 +82,7 @@ class CommandPalette extends InheritedWidget {
     );
   }
 
+  /* 更新关联的BLoC实例 */
   void updateBlocs({
     UserWorkspaceBloc? workspaceBloc,
     SpaceBloc? spaceBloc,
@@ -73,10 +97,23 @@ class CommandPalette extends InheritedWidget {
   bool updateShouldNotify(covariant InheritedWidget oldWidget) => false;
 }
 
+/*
+ * 快捷键意图定义
+ * 用于处理Cmd/Ctrl+P快捷键
+ */
 class _ToggleCommandPaletteIntent extends Intent {
   const _ToggleCommandPaletteIntent();
 }
 
+/*
+ * 命令面板控制器组件
+ * 
+ * 职责：
+ * 1. 监听快捷键触发
+ * 2. 管理弹出层的显示/隐藏
+ * 3. 处理状态变化通知
+ * 4. 协调BLoC之间的通信
+ */
 class _CommandPaletteController extends StatefulWidget {
   const _CommandPaletteController({
     required this.child,
@@ -118,8 +155,27 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
     super.didUpdateWidget(oldWidget);
   }
 
+  /*
+   * 处理命令面板开关切换
+   * 
+   * 打开流程：
+   * 1. 刷新缓存的视图数据
+   * 2. 准备必要的BLoC提供器
+   * 3. 显示浮动层
+   * 4. 传递快捷键构建器
+   * 
+   * 关闭流程：
+   * 1. 弹出浮动层
+   * 2. 重置状态标志
+   * 
+   * 注意事项：
+   * - 使用FlowyOverlay而非Dialog，支持更灵活的定位
+   * - 通过MultiBlocProvider传递必要的状态管理器
+   * - 异步处理关闭回调，确保状态同步
+   */
   void _onToggle() {
     if (_toggleNotifier.value.isOpen && !_isOpen) {
+      /* 打开命令面板 */
       _isOpen = true;
       final workspaceBloc = _toggleNotifier.value.userWorkspaceBloc;
       final spaceBloc = _toggleNotifier.value.spaceBloc;
@@ -127,6 +183,7 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
       Log.info(
         'CommandPalette onToggle: workspaceType ${workspaceBloc?.state.userProfile.workspaceType}',
       );
+      /* 刷新视图缓存，确保搜索结果准确 */
       commandBloc.add(CommandPaletteEvent.refreshCachedViews());
       FlowyOverlay.show(
         context: context,
@@ -139,10 +196,12 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
           child: CommandPaletteModal(shortcutBuilder: _buildShortcut),
         ),
       ).then((_) {
+        /* 关闭后重置状态 */
         _isOpen = false;
         _toggleNotifier.value = _toggleNotifier.value.copyWith(isOpen: false);
       });
     } else if (!_toggleNotifier.value.isOpen && _isOpen) {
+      /* 关闭命令面板 */
       FlowyOverlay.pop(context);
       _isOpen = false;
     }
@@ -152,6 +211,19 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
   Widget build(BuildContext context) =>
       _buildShortcut(widget.child ?? const SizedBox.shrink());
 
+  /*
+   * 构建快捷键监听器
+   * 
+   * 快捷键配置：
+   * - macOS: Cmd + P
+   * - Windows/Linux: Ctrl + P
+   * 
+   * 实现原理：
+   * - FocusableActionDetector捕获键盘事件
+   * - 将快捷键映射到Intent
+   * - Intent触发对应的Action
+   * - Action更新notifier状态
+   */
   Widget _buildShortcut(Widget child) => FocusableActionDetector(
         actions: {
           _ToggleCommandPaletteIntent:
@@ -163,8 +235,8 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
         shortcuts: {
           LogicalKeySet(
             UniversalPlatform.isMacOS
-                ? LogicalKeyboardKey.meta
-                : LogicalKeyboardKey.control,
+                ? LogicalKeyboardKey.meta    /* macOS使用Cmd键 */
+                : LogicalKeyboardKey.control, /* 其他平台使用Ctrl键 */
             LogicalKeyboardKey.keyP,
           ): const _ToggleCommandPaletteIntent(),
         },
@@ -172,6 +244,22 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
       );
 }
 
+/*
+ * 命令面板模态框组件
+ * 
+ * UI结构：
+ * 1. 搜索输入框
+ * 2. 最近访问列表（无搜索时）
+ * 3. 搜索结果列表（有搜索时）
+ * 4. AI问答入口（服务器版）
+ * 5. 无结果提示
+ * 
+ * 交互特性：
+ * - 实时搜索反馈
+ * - 键盘导航支持
+ * - 智能结果排序
+ * - AI聊天集成
+ */
 class CommandPaletteModal extends StatelessWidget {
   const CommandPaletteModal({super.key, required this.shortcutBuilder});
 
@@ -180,10 +268,13 @@ class CommandPaletteModal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final workspaceState = context.read<UserWorkspaceBloc?>()?.state;
+    /* 判断是否显示AI功能（仅服务器版支持） */
     final showAskingAI =
         workspaceState?.userProfile.workspaceType == WorkspaceTypePB.ServerW;
+    
     return BlocListener<CommandPaletteBloc, CommandPaletteState>(
       listener: (_, state) {
+        /* 处理AI问答请求：创建新的聊天页面 */
         if (state.askAI && context.mounted) {
           if (Navigator.canPop(context)) FlowyOverlay.pop(context);
           final currentWorkspace = workspaceState?.workspaces;
@@ -207,9 +298,10 @@ class CommandPaletteModal extends StatelessWidget {
           final hasResult = state.combinedResponseItems.isNotEmpty,
               searching = state.searching;
           final spaceXl = theme.spacing.xl;
+          
           return FlowyDialog(
             backgroundColor: theme.surfaceColorScheme.layer01,
-            alignment: Alignment.topCenter,
+            alignment: Alignment.topCenter,  /* 顶部居中显示 */
             insetPadding: const EdgeInsets.only(top: 100),
             constraints: const BoxConstraints(
               maxHeight: 640,
@@ -219,18 +311,22 @@ class CommandPaletteModal extends StatelessWidget {
             ),
             expandHeight: false,
             child: shortcutBuilder(
-              // Change mainAxisSize to max so Expanded works correctly.
               Padding(
                 padding: EdgeInsets.fromLTRB(spaceXl, spaceXl, spaceXl, 0),
                 child: Column(
                   children: [
+                    /* 搜索输入框：始终显示在顶部 */
                     SearchField(query: state.query, isLoading: searching),
+                    
+                    /* 无查询时：显示最近访问列表 */
                     if (noQuery)
                       Flexible(
                         child: RecentViewsList(
                           onSelected: () => FlowyOverlay.pop(context),
                         ),
                       ),
+                    
+                    /* 有查询且有结果：显示搜索结果 */
                     if (hasResult && hasQuery)
                       Flexible(
                         child: SearchResultList(
@@ -240,16 +336,17 @@ class CommandPaletteModal extends StatelessWidget {
                           resultSummaries: state.resultSummaries,
                         ),
                       )
-                    // When there are no results and the query is not empty and not loading,
-                    // show the no results message, centered in the available space.
+                    
+                    /* 有查询但无结果：显示无结果提示 */
                     else if (hasQuery && !searching) ...[
-                      if (showAskingAI) SearchAskAiEntrance(),
+                      if (showAskingAI) SearchAskAiEntrance(), /* AI入口 */
                       Expanded(
                         child: const NoSearchResultsHint(),
                       ),
                     ],
+                    
+                    /* 搜索中：显示加载指示器 */
                     if (hasQuery && searching && !hasResult)
-                      // Show a loading indicator when searching
                       Expanded(
                         child: Center(
                           child: Center(
@@ -268,7 +365,19 @@ class CommandPaletteModal extends StatelessWidget {
   }
 }
 
-/// Updated _NoResultsHint now centers its content.
+/*
+ * 无搜索结果提示组件
+ * 
+ * 功能：
+ * 1. 友好的无结果提示
+ * 2. 提供垃圾桶链接（可能在垃圾桶中）
+ * 3. 居中显示的优雅布局
+ * 
+ * 交互：
+ * - 点击"垃圾桶"链接打开垃圾桶页面
+ * - 关闭命令面板
+ * - 清理最近打开记录
+ */
 class NoSearchResultsHint extends StatelessWidget {
   const NoSearchResultsHint({super.key});
 
@@ -280,12 +389,14 @@ class NoSearchResultsHint extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          /* 搜索图标 */
           FlowySvg(
             FlowySvgs.m_home_search_icon_m,
             color: theme.iconColorScheme.secondary,
             size: Size.square(24),
           ),
           const VSpace(8),
+          /* 主提示文本 */
           Text(
             LocaleKeys.search_noResultForSearching.tr(),
             style: theme.textStyle.body.enhanced(color: textColor),
@@ -293,6 +404,7 @@ class NoSearchResultsHint extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const VSpace(4),
+          /* 副提示文本，包含可点击的垃圾桶链接 */
           RichText(
             textAlign: TextAlign.center,
             text: TextSpan(
@@ -304,6 +416,7 @@ class NoSearchResultsHint extends StatelessWidget {
                   style: theme.textStyle.caption.underline(color: textColor),
                   recognizer: TapGestureRecognizer()
                     ..onTap = () {
+                      /* 点击后：关闭面板，打开垃圾桶 */
                       FlowyOverlay.pop(context);
                       getIt<MenuSharedState>().latestOpenView = null;
                       getIt<TabsBloc>().add(
@@ -322,6 +435,21 @@ class NoSearchResultsHint extends StatelessWidget {
   }
 }
 
+/*
+ * 命令面板通知器值对象
+ * 
+ * 封装命令面板的状态和依赖
+ * 
+ * 字段说明：
+ * - isOpen：面板是否打开
+ * - userWorkspaceBloc：工作区状态管理
+ * - spaceBloc：空间状态管理
+ * 
+ * 用途：
+ * - 通过ValueNotifier传递状态变化
+ * - 携带必要的BLoC实例
+ * - 支持不可变更新（copyWith）
+ */
 class CommandPaletteNotifierValue {
   CommandPaletteNotifierValue({
     this.isOpen = false,
