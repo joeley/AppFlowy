@@ -368,17 +368,48 @@ Future<void> initGetIt(
   );
 
   // === 注册全局单例服务 ===
+  //
+  // 为什么这些服务要在这里注册？
+  // 
+  // 1. **生命周期要求**：这些服务需要在应用整个生命周期内存在
+  //    - 必须在任何UI组件创建之前就存在
+  //    - 需要比页面/路由更长的生命周期
+  // 
+  // 2. **跨组件协调**：需要在多个不相关的组件间共享状态
+  //    - ViewExpanderRegistry: 多个视图组件需要注册/查询展开状态
+  //    - LinkHoverTriggers: 文档中的多个链接需要协调显示
+  //    - FloatingToolbarController: 确保同时只有一个工具栏显示
+  // 
+  // 3. **全局访问需求**：通过getIt在任何地方都能访问
+  //    - 不需要通过Widget树传递
+  //    - 避免了Provider/InheritedWidget的层层传递
+  // 
+  // 4. **单例保证**：必须全局唯一
+  //    - AFNavigatorObserver: 只能有一个导航观察者
+  //    - FloatingToolbarController: 全局只能有一个工具栏控制器
+  // 
+  // 5. **初始化时机**：在应用启动时就需要准备好
+  //    - 在MaterialApp创建前就需要存在
+  //    - 某些服务(如NavigatorObserver)需要在路由初始化时就注入
 
   // 插件沙箱：管理和隔离插件运行环境
+  // 必须是单例，因为需要全局管理所有插件的生命周期
   getIt.registerSingleton<PluginSandbox>(PluginSandbox());
 
   // 视图展开注册表：管理可展开视图的注册
+  // 单例原因：所有视图的展开状态需要集中管理，避免状态不一致
   getIt.registerSingleton<ViewExpanderRegistry>(ViewExpanderRegistry());
-  // 链接悬停触发器：处理链接悬停事件
+  
+  // 链接悬停触发器：处理链接悬停事件  
+  // 单例原因：文档中所有链接需要统一管理，避免多个菜单同时显示
   getIt.registerSingleton<LinkHoverTriggers>(LinkHoverTriggers());
+  
   // 导航观察者：监控路由导航事件
+  // 单例原因：Flutter的Navigator只接受一个观察者实例，必须全局唯一
   getIt.registerSingleton<AFNavigatorObserver>(AFNavigatorObserver());
+  
   // 浮动工具栏控制器：管理文档编辑器的浮动工具栏
+  // 单例原因：需要协调多个编辑器实例，确保只有一个工具栏显示
   getIt.registerSingleton<FloatingToolbarController>(
     FloatingToolbarController(),
   );
