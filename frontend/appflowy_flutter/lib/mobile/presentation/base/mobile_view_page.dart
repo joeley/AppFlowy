@@ -184,14 +184,23 @@ class _MobileViewPageState extends State<MobileViewPage> {
     );
   }
 
+  /// 构建应用程序主体结构
+  /// 
+  /// 根据视图类型（文档/其他）选择不同的应用栏和布局方式
+  /// 文档视图使用沉浸式应用栏，其他视图使用标准应用栏
   Widget _buildApp(
     BuildContext context,
     ViewPB? view,
     Widget child,
   ) {
+    // 判断是否为文档视图，文档视图需要特殊的沉浸式处理
     final isDocument = view?.layout.isDocumentView ?? false;
+    // 构建应用栏标题
     final title = _buildTitle(context, view);
+    // 构建应用栏操作按钮
     final actions = _buildAppBarActions(context, view);
+    
+    // 根据视图类型选择不同的应用栏实现
     final appBar = isDocument
         ? MobileViewPageImmersiveAppBar(
             preferredSize: Size(
@@ -199,38 +208,51 @@ class _MobileViewPageState extends State<MobileViewPage> {
               AppBarTheme.of(context).toolbarHeight ?? kToolbarHeight,
             ),
             title: title,
-            appBarOpacity: _appBarOpacity,
+            appBarOpacity: _appBarOpacity, // 沉浸模式下的透明度控制
             actions: actions,
             view: view,
           )
-        : FlowyAppBar(title: title, actions: actions);
+        : FlowyAppBar(title: title, actions: actions); // 标准应用栏
+    
+    // 根据视图类型处理主体内容
     final body = isDocument
         ? Builder(
             builder: (context) {
+              // 重建滚动通知观察者，用于沉浸模式下的应用栏透明度控制
               _rebuildScrollNotificationObserver(context);
               return child;
             },
           )
-        : SafeArea(child: child);
+        : SafeArea(child: child); // 非文档视图使用SafeArea包装
+    
     return Scaffold(
+      // 文档视图延伸到应用栏后面，实现沉浸效果
       extendBodyBehindAppBar: isDocument,
       appBar: appBar,
       body: Padding(
+        // 应用顶部内边距
         padding: EdgeInsets.only(top: widget.bodyPaddingTop),
         child: body,
       ),
     );
   }
 
+  /// 构建页面主体内容
+  /// 
+  /// 处理加载状态、错误状态和成功状态的不同显示
+  /// 使用插件系统动态构建不同类型的视图内容
   Widget _buildBody(BuildContext context, MobileViewPageState state) {
+    // 加载状态：显示进度指示器
     if (state.isLoading) {
       return const Center(
         child: CircularProgressIndicator(),
       );
     }
 
+    // 检查是否有结果数据
     final result = state.result;
     if (result == null) {
+      // 无结果时显示错误状态容器
       return FlowyMobileStateContainer.error(
         emoji: '😔',
         title: LocaleKeys.error_weAreSorry.tr(),
@@ -239,13 +261,18 @@ class _MobileViewPageState extends State<MobileViewPage> {
       );
     }
 
+    // 处理Either<ViewPB, FlowyError>类型的结果
     return result.fold(
+      // 成功情况：构建视图内容
       (view) {
+        // 获取视图对应的插件并初始化
         final plugin = view.plugin(arguments: widget.arguments ?? const {})
           ..init();
+        // 使用插件的widgetBuilder构建具体的视图内容
         return plugin.widgetBuilder.buildWidget(
           shrinkWrap: false,
           context: PluginContext(userProfile: state.userProfilePB),
+          // 传递给插件的数据上下文
           data: {
             MobileDocumentScreen.viewFixedTitle: widget.fixedTitle,
             MobileDocumentScreen.viewBlockId: widget.blockId,
@@ -253,6 +280,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
           },
         );
       },
+      // 错误情况：显示错误信息
       (error) {
         return FlowyMobileStateContainer.error(
           emoji: '😔',
@@ -264,15 +292,17 @@ class _MobileViewPageState extends State<MobileViewPage> {
     );
   }
 
-  // Document:
-  //  - [ collaborators, sync_indicator, layout_button, more_button]
-  // Database:
-  //  - [ sync_indicator, more_button]
+  /// 构建应用栏右侧操作按钮
+  /// 
+  /// 根据视图类型和权限状态动态生成操作按钮列表
+  /// 文档视图：协作者、同步指示器、布局按钮、更多按钮
+  /// 数据库视图：同步指示器、更多按钮
   List<Widget> _buildAppBarActions(BuildContext context, ViewPB? view) {
     if (view == null) {
       return [];
     }
 
+    // 获取当前页面状态
     final isImmersiveMode =
         context.read<MobileViewPageBloc>().state.isImmersiveMode;
     final isLocked =
@@ -280,8 +310,8 @@ class _MobileViewPageState extends State<MobileViewPage> {
     final accessLevel = context.read<PageAccessLevelBloc>().state.accessLevel;
     final actions = <Widget>[];
 
+    // 同步功能开启且为文档视图时显示协作者信息
     if (FeatureFlag.syncDocument.isOn) {
-      // only document supports displaying collaborators.
       if (view.layout.isDocumentView) {
         actions.addAll([
           DocumentCollaborators(
@@ -291,22 +321,24 @@ class _MobileViewPageState extends State<MobileViewPage> {
             padding: const EdgeInsets.symmetric(vertical: 8),
             view: view,
           ),
-          const HSpace(12.0),
+          const HSpace(12.0), // 协作者组件后的间距
         ]);
       }
     }
 
+    // 文档视图且未锁定时显示布局按钮
     if (view.layout.isDocumentView && !isLocked) {
       actions.addAll([
         MobileViewPageLayoutButton(
           view: view,
           isImmersiveMode: isImmersiveMode,
-          appBarOpacity: _appBarOpacity,
+          appBarOpacity: _appBarOpacity, // 沉浸模式下的透明度控制
           tabs: widget.tabs,
         ),
       ]);
     }
 
+    // 根据权限和配置决定是否显示更多按钮
     if (widget.showMoreButton && accessLevel != ShareAccessLevel.readOnly) {
       actions.addAll([
         MobileViewPageMoreButton(
@@ -316,6 +348,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
         ),
       ]);
     } else {
+      // 不显示更多按钮时添加占位间距
       actions.addAll([
         const HSpace(18.0),
       ]);
@@ -324,11 +357,16 @@ class _MobileViewPageState extends State<MobileViewPage> {
     return actions;
   }
 
+  /// 构建应用栏标题
+  /// 
+  /// 在沉浸模式下，根据滚动位置动态调整标题显示
+  /// 透明度低时显示锁定状态，透明度高时显示完整标题
   Widget _buildTitle(BuildContext context, ViewPB? view) {
     final icon = view?.icon;
     return ValueListenableBuilder(
-      valueListenable: _appBarOpacity,
+      valueListenable: _appBarOpacity, // 监听应用栏透明度变化
       builder: (_, value, child) {
+        // 当透明度很低时（滚动到顶部附近），只显示锁定状态
         if (value < 0.99) {
           return Padding(
             padding: const EdgeInsets.only(left: 6.0),
@@ -336,29 +374,34 @@ class _MobileViewPageState extends State<MobileViewPage> {
           );
         }
 
+        // 确定显示的标题文本（优先级：固定标题 > 视图名称 > 传入标题）
         final name =
             widget.fixedTitle ?? view?.nameOrDefault ?? widget.title ?? '';
 
+        // 透明度较高时显示完整标题
         return Opacity(
-          opacity: value,
+          opacity: value, // 根据滚动位置调整整体透明度
           child: Row(
             children: [
+              // 显示视图图标（如果存在）
               if (icon != null && icon.value.isNotEmpty) ...[
                 RawEmojiIconWidget(
                   emoji: icon.toEmojiIconData(),
                   emojiSize: 15,
                 ),
-                const HSpace(4),
+                const HSpace(4), // 图标与标题间的间距
               ],
+              // 标题文本，使用Flexible允许文本自适应宽度
               Flexible(
                 child: FlowyText.medium(
                   name,
                   fontSize: 15.0,
-                  overflow: TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis, // 文本溢出时显示省略号
                   figmaLineHeight: 18.0,
                 ),
               ),
               const HSpace(4.0),
+              // 锁定状态图标
               _buildLockStatusIcon(context, view),
             ],
           ),
@@ -367,44 +410,61 @@ class _MobileViewPageState extends State<MobileViewPage> {
     );
   }
 
+  /// 构建页面锁定状态显示组件
+  /// 
+  /// 在沉浸模式下透明度较低时显示，用于提示用户当前页面的锁定状态
   Widget _buildLockStatus(BuildContext context, ViewPB? view) {
+    // 聊天视图不支持锁定功能
     if (view == null || view.layout == ViewLayoutPB.Chat) {
       return const SizedBox.shrink();
     }
 
     return BlocConsumer<PageAccessLevelBloc, PageAccessLevelState>(
+      // 只在锁定状态加载完成时触发监听
       listenWhen: (previous, current) =>
           previous.isLoadingLockStatus == current.isLoadingLockStatus &&
           current.isLoadingLockStatus == false,
+      // 当页面被锁定时的处理
       listener: (context, state) {
         if (state.isLocked) {
+          // 显示锁定提示
           showToastNotification(
             message: LocaleKeys.lockPage_pageLockedToast.tr(),
           );
-
+          // 退出编辑模式
           EditorNotification.exitEditing().post();
         }
       },
+      // 根据锁定状态构建不同的UI组件
       builder: (context, state) {
         if (state.isLocked) {
+          // 显示已锁定状态
           return LockedPageStatus();
         } else if (!state.isLocked && state.lockCounter > 0) {
+          // 显示重新锁定状态（之前被锁定过）
           return ReLockedPageStatus();
         }
+        // 未锁定状态不显示任何内容
         return const SizedBox.shrink();
       },
     );
   }
 
+  /// 构建锁定状态图标
+  /// 
+  /// 在标题栏中显示的小图标，支持点击切换锁定状态
   Widget _buildLockStatusIcon(BuildContext context, ViewPB? view) {
+    // 聊天视图不支持锁定功能
     if (view == null || view.layout == ViewLayoutPB.Chat) {
       return const SizedBox.shrink();
     }
 
     return BlocConsumer<PageAccessLevelBloc, PageAccessLevelState>(
+      // 只在锁定状态加载完成时触发监听
       listenWhen: (previous, current) =>
           previous.isLoadingLockStatus == current.isLoadingLockStatus &&
           current.isLoadingLockStatus == false,
+      // 监听锁定状态变化
       listener: (context, state) {
         if (state.isLocked) {
           showToastNotification(
@@ -412,11 +472,14 @@ class _MobileViewPageState extends State<MobileViewPage> {
           );
         }
       },
+      // 根据状态构建不同的锁定图标
       builder: (context, state) {
         if (state.isLocked) {
+          // 已锁定：显示锁定图标，点击可解锁
           return GestureDetector(
-            behavior: HitTestBehavior.opaque,
+            behavior: HitTestBehavior.opaque, // 扩大点击区域
             onTap: () {
+              // 发送解锁事件
               context.read<PageAccessLevelBloc>().add(
                     const PageAccessLevelEvent.unlock(),
                   );
@@ -428,15 +491,17 @@ class _MobileViewPageState extends State<MobileViewPage> {
                 bottom: 4.0,
               ),
               child: FlowySvg(
-                FlowySvgs.lock_page_fill_s,
+                FlowySvgs.lock_page_fill_s, // 锁定状态图标
                 blendMode: null,
               ),
             ),
           );
         } else if (!state.isLocked && state.lockCounter > 0) {
+          // 未锁定但之前被锁定过：显示解锁图标，点击可重新锁定
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
+              // 发送锁定事件
               context.read<PageAccessLevelBloc>().add(
                     const PageAccessLevelEvent.lock(),
                   );
@@ -448,41 +513,59 @@ class _MobileViewPageState extends State<MobileViewPage> {
                 bottom: 4.0,
               ),
               child: FlowySvg(
-                FlowySvgs.unlock_page_s,
-                color: Color(0xFF8F959E),
+                FlowySvgs.unlock_page_s, // 解锁状态图标
+                color: Color(0xFF8F959E), // 灰色显示
                 blendMode: null,
               ),
             ),
           );
         }
+        // 从未被锁定过的页面不显示任何图标
         return const SizedBox.shrink();
       },
     );
   }
 
+  /// 重建滚动通知观察者
+  /// 
+  /// 用于沉浸模式下监听滚动事件，动态调整应用栏透明度
   void _rebuildScrollNotificationObserver(BuildContext context) {
+    // 移除之前的监听器，避免内存泄漏
     _scrollNotificationObserver?.removeListener(_onScrollNotification);
+    // 从当前context获取滚动通知观察者
     _scrollNotificationObserver = ScrollNotificationObserver.maybeOf(context);
+    // 添加新的滚动通知监听器
     _scrollNotificationObserver?.addListener(_onScrollNotification);
   }
 
-  // immersive mode related
-  // auto show or hide the app bar based on the scroll position
+  /// 沉浸模式相关功能
+  /// 根据滚动位置自动显示或隐藏应用栏
+  /// 
+  /// 监听滚动事件，动态调整应用栏透明度以实现沉浸式体验
   void _onScrollNotification(ScrollNotification notification) {
+    // 如果观察者为空则直接返回
     if (_scrollNotificationObserver == null) {
       return;
     }
 
+    // 只处理滚动更新通知，且符合默认谓词条件
     if (notification is ScrollUpdateNotification &&
         defaultScrollNotificationPredicate(notification)) {
       final ScrollMetrics metrics = notification.metrics;
+      
+      // 计算透明度变化的基准高度
       double height =
           MediaQuery.of(context).padding.top + widget.bodyPaddingTop;
+      // Android平台需要额外考虑工具栏高度
       if (defaultTargetPlatform == TargetPlatform.android) {
         height += AppBarTheme.of(context).toolbarHeight ?? kToolbarHeight;
       }
+      
+      // 计算滚动进度（0.0到1.0之间）
       final progress = (metrics.pixels / height).clamp(0.0, 1.0);
-      // reduce the sensitivity of the app bar opacity change
+      
+      // 降低应用栏透明度变化的敏感度，避免频繁更新
+      // 只有在变化足够大或到达边界值时才更新
       if ((progress - _appBarOpacity.value).abs() >= 0.1 ||
           progress == 0 ||
           progress == 1.0) {

@@ -50,21 +50,23 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      // 异步获取当前用户信息
+      // 异步获取当前用户信息，使用依赖注入获取AuthService
       future: getIt<AuthService>().getUser(),
       builder: (context, snapshot) {
         String? errorMsg;
         
-        // 数据加载中显示加载指示器
+        // 数据加载中显示自适应加载指示器（iOS和Android样式不同）
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator.adaptive());
         }
 
-        // 解析用户信息或错误信息
+        // 使用Either模式fold方法处理成功或失败的结果
         final userProfile = snapshot.data?.fold(
+          // 成功情况：直接返回用户信息
           (userProfile) {
             return userProfile;
           },
+          // 失败情况：保存错误信息并返图null
           (error) {
             errorMsg = error.msg;
             return null;
@@ -76,8 +78,8 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
             titleText: LocaleKeys.settings_title.tr(),
           ),
           body: userProfile == null
-              ? _buildErrorWidget(errorMsg)  // 显示错误状态
-              : _buildSettingsWidget(userProfile),  // 显示设置列表
+              ? _buildErrorWidget(errorMsg)      // 显示错误状态页面
+              : _buildSettingsWidget(userProfile), // 显示设置列表页面
         );
       },
     );
@@ -103,16 +105,18 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
   /// 3. 根据配置显示/隐藏特定设置组
   Widget _buildSettingsWidget(UserProfilePB userProfile) {
     return BlocProvider(
-      // 创建用户工作区BLoC
+      // 创建用户工作区BLoC管理工作区状态
       create: (context) => UserWorkspaceBloc(
         userProfile: userProfile,
+        // 使用Rust实现的工作区仓库
         repository: RustWorkspaceRepositoryImpl(
           userId: userProfile.id,
         ),
-      )..add(UserWorkspaceEvent.initialize()),
+      )..add(UserWorkspaceEvent.initialize()),  // 立即初始化
       
       child: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
         builder: (context, state) {
+          // 获取当前工作区ID，用于AI设置组件的key
           final currentWorkspaceId = state.currentWorkspace?.workspaceId ?? '';
           
           return SingleChildScrollView(
@@ -125,7 +129,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                     userProfile: userProfile,
                   ),
                   
-                  // 工作区设置（仅服务器认证用户可见）
+                  // 工作区设置（仅服务器认证用户可见，本地用户不显示）
                   if (state.userProfile.userAuthType == AuthTypePB.Server)
                     const WorkspaceSettingGroup(),
                   
@@ -135,13 +139,13 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                   // 语言设置
                   const LanguageSettingGroup(),
                   
-                  // 云服务设置（根据环境变量决定是否显示）
+                  // 云服务设置（根据环境变量决定是否显示自定义云服务）
                   if (Env.enableCustomCloud) const CloudSettingGroup(),
                   
-                  // AI设置（需要认证启用）
+                  // AI设置（需要云服务认证启用）
                   if (isAuthEnabled)
                     AiSettingsGroup(
-                      key: ValueKey(currentWorkspaceId),  // 使用工作区ID作为key，确保切换时重建
+                      key: ValueKey(currentWorkspaceId),  // 使用工作区ID作为key，确保切换工作区时重建组件
                       userProfile: userProfile,
                       workspaceId: currentWorkspaceId,
                     ),

@@ -183,17 +183,23 @@ class _MobileWorkspace extends StatelessWidget {
     );
   }
 
+  /// 显示工作区切换底部弹出菜单
+  /// 
+  /// 功能说明：
+  /// 1. 显示所有可用的工作区列表
+  /// 2. 支持切换到其他工作区
+  /// 3. 使用底部弹出样式提升用户体验
   void _showSwitchWorkspacesBottomSheet(
     BuildContext context,
   ) {
     showMobileBottomSheet(
       context,
-      showDivider: false,
-      showHeader: true,
-      showDragHandle: true,
-      showCloseButton: true,
-      useRootNavigator: true,
-      enableScrollable: true,
+      showDivider: false,      // 不显示分割线
+      showHeader: true,        // 显示标题头部
+      showDragHandle: true,    // 显示拖拽手柄
+      showCloseButton: true,   // 显示关闭按钮
+      useRootNavigator: true,  // 使用根导航器
+      enableScrollable: true,  // 启用滚动
       bottomSheetPadding: context.bottomSheetPadding(),
       title: LocaleKeys.workspace_menuTitle.tr(),
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -234,41 +240,59 @@ class _MobileWorkspace extends StatelessWidget {
   }
 }
 
+/// 用户头像组件
+/// 
+/// 功能说明：
+/// 1. 显示用户头像（支持Emoji和SVG图标）
+/// 2. 点击可唤起Emoji选择器更换头像
+/// 3. 自动兼容旧版用户图标格式
+/// 
+/// 设计思想：
+/// - 优先显示用户自定义头像
+/// - 兼容内置SVG图标（旧版数据）
+/// - 提供友好的默认头像（🐻）
 class _UserIcon extends StatelessWidget {
   const _UserIcon({
     required this.userIcon,
   });
 
+  /// 用户头像字符串（可能是Emoji或SVG图标名称）
   final String userIcon;
 
   @override
   Widget build(BuildContext context) {
     return FlowyButton(
       useIntrinsicWidth: true,
+      // 根据图标类型显示不同内容
       text: builtInSVGIcons.contains(userIcon)
-          // to be compatible with old user icon
+          // 兼容旧版内置SVG图标格式
           ? FlowySvg(
               FlowySvgData('emoji/$userIcon'),
               size: const Size.square(32),
               blendMode: null,
             )
+          // 显示Emoji图标或默认熊头像
           : FlowyText(
               userIcon.isNotEmpty ? userIcon : '🐻',
               fontSize: 26,
             ),
       onTap: () async {
+        // 跳转到Emoji选择器页面
         final icon = await context.push<EmojiIconData>(
           Uri(
             path: MobileEmojiPickerScreen.routeName,
             queryParameters: {
               MobileEmojiPickerScreen.pageTitle:
                   LocaleKeys.titleBar_userIcon.tr(),
+              // 只显示Emoji选择标签
               MobileEmojiPickerScreen.selectTabs: [PickerTabType.emoji.name],
             },
           ).toString(),
         );
+        // 处理用户选择的图标
         if (icon != null) {
           if (context.mounted) {
+            // 更新用户头像
             context.read<SettingsUserViewBloc>().add(
                   SettingsUserEvent.updateUserIcon(
                     iconUrl: icon.emoji,

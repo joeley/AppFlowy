@@ -37,21 +37,33 @@ class MobileSettingItem extends StatelessWidget {
     );
   }
 
+  /// 构建默认标题组件
+  /// 
+  /// 当没有提供自定义title时，使用此方法构建默认的标题UI：
+  /// 1. 可选的前导图标 + 8像素间距
+  /// 2. 可扩展的文本区域，支持溢出省略
+  /// 3. 使用AppFlowy主题的heading4样式和主文本颜色
+  /// 
+  /// [context] 构建上下文，用于获取主题
+  /// [name] 设置项名称文本
+  /// 
+  /// Returns: 包含图标和文本的Row布局Widget
   Widget _buildDefaultTitle(BuildContext context, String? name) {
-    final theme = AppFlowyTheme.of(context);
+    final theme = AppFlowyTheme.of(context); // 获取当前主题配置
     return Row(
       children: [
+        // 条件渲染前导图标，使用展开语法避免null检查
         if (leadingIcon != null) ...[
-          leadingIcon!,
-          const HSpace(8),
+          leadingIcon!, // 显示前导图标
+          const HSpace(8), // 图标与文本之间的8像素水平间距
         ],
-        Expanded(
+        Expanded( // 文本区域可扩展，占用剩余空间
           child: Text(
-            name ?? '',
-            style: theme.textStyle.heading4.standard(
-              color: theme.textColorScheme.primary,
+            name ?? '', // 显示名称，null时显示空字符串
+            style: theme.textStyle.heading4.standard( // 使用标准的heading4样式
+              color: theme.textColorScheme.primary, // 主文本颜色
             ),
-            overflow: TextOverflow.ellipsis,
+            overflow: TextOverflow.ellipsis, // 文本溢出时显示省略号
           ),
         ),
       ],

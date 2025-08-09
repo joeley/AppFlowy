@@ -1,4 +1,6 @@
+// 导入SVG图标资源
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+// 导入本地化键值对
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/app_bar_actions.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
@@ -16,8 +18,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
+// 导入排序底部弹窗的Cubit状态管理
 import 'database_sort_bottom_sheet_cubit.dart';
 
+/// 移动端数据库排序编辑器
+/// 
+/// 这是AppFlowy数据库功能中用于移动端排序管理的核心组件。
+/// 设计思想：
+/// 1. 使用PageView实现双页面架构：概览页和详情编辑页
+/// 2. 集成Cubit状态管理，统一处理排序编辑逻辑
+/// 3. 支持全数据类型的排序功能，包括升序和降序
+/// 4. 支持拖拽重排排序优先级，直观的交互体验
+/// 
+/// 主要功能：
+/// - 排序条件概览列表
+/// - 创建新排序条件
+/// - 编辑现有排序条件
+/// - 拖拽重排优先级
+/// - 删除排序条件
 class MobileSortEditor extends StatefulWidget {
   const MobileSortEditor({
     super.key,
@@ -27,7 +45,9 @@ class MobileSortEditor extends StatefulWidget {
   State<MobileSortEditor> createState() => _MobileSortEditorState();
 }
 
+/// 移动端排序编辑器的状态管理类
 class _MobileSortEditorState extends State<MobileSortEditor> {
+  /// PageView控制器，管理概览和详情页面的切换
   final PageController _pageController = PageController();
 
   @override
@@ -69,6 +89,8 @@ class _MobileSortEditorState extends State<MobileSortEditor> {
   }
 }
 
+/// 排序编辑器的头部导航栏组件
+/// 负责显示标题、返回按钮和保存按钮
 class _Header extends StatelessWidget {
   const _Header();
 
@@ -133,6 +155,8 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// 排序概览页面组件
+/// 显示所有现有的排序条件和添加新排序的按钮
 class _Overview extends StatelessWidget {
   const _Overview();
 
@@ -233,9 +257,12 @@ class _Overview extends StatelessWidget {
   }
 }
 
+/// 排序条件卡片组件
+/// 展示单个排序条件的详细信息和操作按钮
 class _SortItem extends StatelessWidget {
   const _SortItem({super.key, required this.sort});
 
+  /// 数据库排序条件对象
   final DatabaseSort sort;
 
   @override
@@ -388,6 +415,8 @@ class _SortItem extends StatelessWidget {
   }
 }
 
+/// 排序详情编辑页面组件
+/// 根据当前状态显示创建新排序或编辑现有排序的界面
 class _SortDetail extends StatelessWidget {
   const _SortDetail();
 
@@ -411,13 +440,17 @@ class _SortDetail extends StatelessWidget {
   }
 }
 
+/// 排序详情内容组件
+/// 包含排序条件选择、字段选择和排序方向选择
 class _SortDetailContent extends StatelessWidget {
   const _SortDetailContent({
     this.sort,
   });
 
+  /// 可选的数据库排序条件，为空时表示创建新排序
   final DatabaseSort? sort;
 
+  /// 判断是否为创建新排序模式
   bool get isCreatingNewSort => sort == null;
 
   @override

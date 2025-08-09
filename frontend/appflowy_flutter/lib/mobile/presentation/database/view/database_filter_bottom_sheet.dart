@@ -1,4 +1,6 @@
+// 导入SVG图标资源
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+// 导入本地化键值对
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/app_bar_actions.dart';
 import 'package:appflowy/mobile/presentation/database/view/database_filter_condition_list.dart';
@@ -25,8 +27,24 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:protobuf/protobuf.dart' hide FieldInfo;
 import 'package:time/time.dart';
 
+// 导入过滤器底部弹窗的Cubit状态管理
 import 'database_filter_bottom_sheet_cubit.dart';
 
+/// 移动端数据库过滤器编辑器
+/// 
+/// 这是AppFlowy数据库功能中的高级组件，专门用于移动端的数据过滤功能。
+/// 设计思想：
+/// 1. 使用PageView实现多页面切换，包含过滤器概览和详细编辑页面
+/// 2. 集成Cubit状态管理，实现复杂的过滤器编辑逻辑
+/// 3. 支持多种数据类型的过滤条件：文本、数字、选项、日期等
+/// 4. 提供直观的UI交互，支持创建、编辑、删除过滤条件
+/// 
+/// 主要功能：
+/// - 过滤器概览列表
+/// - 创建新过滤条件
+/// - 编辑现有过滤条件
+/// - 设置过滤条件内容
+/// - 支持复杂的日期过滤
 class MobileFilterEditor extends StatefulWidget {
   const MobileFilterEditor({super.key});
 
@@ -34,10 +52,14 @@ class MobileFilterEditor extends StatefulWidget {
   State<MobileFilterEditor> createState() => _MobileFilterEditorState();
 }
 
+/// 移动端过滤器编辑器的状态管理类
 class _MobileFilterEditorState extends State<MobileFilterEditor> {
+  /// PageView控制器，管理概览和详情页面的切换
   final pageController = PageController();
+  /// 滚动控制器，用于过滤器列表的滚动管理
   final scrollController = ScrollController();
 
+  /// 释放资源，避免内存泄漏
   @override
   void dispose() {
     pageController.dispose();
@@ -75,6 +97,8 @@ class _MobileFilterEditorState extends State<MobileFilterEditor> {
   }
 }
 
+/// 过滤器编辑器的头部导航栏组件
+/// 负责显示标题、返回按钮和保存按钮
 class _Header extends StatelessWidget {
   const _Header();
 
@@ -124,6 +148,8 @@ class _Header extends StatelessWidget {
     );
   }
 
+  /// 判断是否显示返回按钮
+  /// 只有在非概览页面时才显示返回按钮
   bool _isBackButtonShown(MobileFilterEditorState state) {
     return state.maybeWhen(
       overview: (_) => false,
@@ -131,6 +157,8 @@ class _Header extends StatelessWidget {
     );
   }
 
+  /// 判断是否显示保存按钮
+  /// 在编辑条件或编辑内容时显示保存按钮
   bool _isSaveButtonShown(MobileFilterEditorState state) {
     return state.maybeWhen(
       editCondition: (filterId, newFilter, showSave) => showSave,
@@ -139,6 +167,8 @@ class _Header extends StatelessWidget {
     );
   }
 
+  /// 判断保存按钮是否可用
+  /// 根据编辑状态和数据完整性确定
   bool _isSaveButtonEnabled(MobileFilterEditorState state) {
     return state.maybeWhen(
       editCondition: (_, __, enableSave) => enableSave,
@@ -147,20 +177,25 @@ class _Header extends StatelessWidget {
     );
   }
 
+  /// 保存按钮的点击处理逻辑
+  /// 根据当前编辑状态执行相应的保存操作
   void _saveOnTapHandler(BuildContext context, MobileFilterEditorState state) {
     state.maybeWhen(
       editCondition: (filterId, newFilter, _) {
+        // 保存编辑的过滤条件
         context
             .read<FilterEditorBloc>()
             .add(FilterEditorEvent.updateFilter(newFilter));
       },
       editContent: (filterId, newFilter) {
+        // 保存编辑的过滤内容
         context
             .read<FilterEditorBloc>()
             .add(FilterEditorEvent.updateFilter(newFilter));
       },
       orElse: () {},
     );
+    // 保存完成后返回概览页面
     context.read<MobileFilterEditorCubit>().returnToOverview();
   }
 }

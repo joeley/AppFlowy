@@ -51,42 +51,47 @@ class MobileHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return FutureBuilder(
       // 并行获取工作区设置和用户信息
+      // 使用Future.wait提高效率，同时发起两个异步请求
       future: Future.wait([
-        FolderEventGetCurrentWorkspaceSetting().send(),
-        getIt<AuthService>().getUser(),
+        FolderEventGetCurrentWorkspaceSetting().send(),  // 获取工作区设置
+        getIt<AuthService>().getUser(),                  // 获取用户信息
       ]),
       builder: (context, snapshots) {
-        // 数据加载中显示加载指示器
+        // 数据加载中显示自适应的加载指示器
+        // adaptive会根据平台显示合适的加载样式（iOS/Android）
         if (!snapshots.hasData) {
           return const Center(child: CircularProgressIndicator.adaptive());
         }
 
-        // 解析工作区设置
+        // 解析工作区设置结果
+        // 使用fold方法处理Result类型，分别处理成功和失败情况
         final workspaceLatest = snapshots.data?[0].fold(
           (workspaceLatestPB) {
             return workspaceLatestPB as WorkspaceLatestPB?;
           },
-          (error) => null,
+          (error) => null,  // 错误时返回null
         );
         
-        // 解析用户信息
+        // 解析用户信息结果
         final userProfile = snapshots.data?[1].fold(
           (userProfilePB) {
             return userProfilePB as UserProfilePB?;
           },
-          (error) => null,
+          (error) => null,  // 错误时返回null
         );
 
         // 处理异常情况：工作区或用户信息获取失败
         // 这种情况很少发生，通常是工作区已经打开时可能出现
+        // 或者网络连接问题、认证失效等情况
         if (workspaceLatest == null || userProfile == null) {
           return const WorkspaceFailedScreen();
         }
 
         return Scaffold(
           body: SafeArea(
-            bottom: false,
+            bottom: false,  // 不在底部应用SafeArea，保留给导航栏的空间
             child: Provider.value(
+              // 提供用户信息给子组件树，使用Provider模式
               value: userProfile,
               child: MobileHomePage(
                 userProfile: userProfile,
@@ -143,9 +148,10 @@ class _MobileHomePageState extends State<MobileHomePage> {
   void initState() {
     super.initState();
 
-    // 监听最新视图变化
+    // 监听最新视图变化，用于记录用户最后打开的页面
+    // 这有助于下次启动应用时恢复到最后位置
     getIt<MenuSharedState>().addLatestViewListener(_onLatestViewChange);
-    // 启动提醒服务
+    // 启动提醒服务，开始监听和处理用户提醒事件
     getIt<ReminderBloc>().add(const ReminderEvent.started());
   }
 
@@ -161,21 +167,26 @@ class _MobileHomePageState extends State<MobileHomePage> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        // 用户工作区管理
+        // 用户工作区管理BLoC
+        // 负责处理工作区的创建、切换、删除等操作
         BlocProvider(
           create: (_) => UserWorkspaceBloc(
             userProfile: widget.userProfile,
+            // 使用Rust后端的工作区仓库实现
             repository: RustWorkspaceRepositoryImpl(
               userId: widget.userProfile.id,
             ),
-          )..add(UserWorkspaceEvent.initialize()),
+          )..add(UserWorkspaceEvent.initialize()),  // 创建后立即初始化
         ),
-        // 收藏夹管理
+        // 收藏夹管理BLoC
+        // 负责处理用户的收藏页面和文件夹
         BlocProvider(
           create: (context) =>
               FavoriteBloc()..add(const FavoriteEvent.initial()),
         ),
-        // 提醒服务（使用依赖注入的单例）
+        // 提醒服务BLoC（使用依赖注入的全局单例）
+        // 使用BlocProvider.value而不是BlocProvider，
+        // 因为这是已经存在的全局实例，不需要重新创建
         BlocProvider.value(
           value: getIt<ReminderBloc>()..add(const ReminderEvent.started()),
         ),
@@ -279,12 +290,14 @@ class _HomePageState extends State<_HomePage> {
             Expanded(
               child: MultiBlocProvider(
                 providers: [
-                  // 空间排序管理
+                  // 空间排序管理BLoC
+                  // 负责管理Tab页面的排序和默认显示
                   BlocProvider(
                     create: (_) =>
                         SpaceOrderBloc()..add(const SpaceOrderEvent.initial()),
                   ),
-                  // 侧边栏部分管理（收藏、最近等）
+                  // 侧边栏部分管理BLoC
+                  // 负责管理侧边栏的各个部分（收藏、最近访问、垃圾筒等）
                   BlocProvider(
                     create: (_) => SidebarSectionsBloc()
                       ..add(
@@ -294,19 +307,22 @@ class _HomePageState extends State<_HomePage> {
                         ),
                       ),
                   ),
-                  // 收藏夹管理（第二个实例）
+                  // 收藏夹管理BLoC（第二个实例）
+                  // 这里创建了第二个收藏夹BLoC实例，
+                  // 可能是为了在不同的UI部分独立管理收藏状态
                   BlocProvider(
                     create: (_) =>
                         FavoriteBloc()..add(const FavoriteEvent.initial()),
                   ),
-                  // 空间管理
+                  // 空间管理BLoC
+                  // 负责管理工作区中的空间列表和空间相关操作
                   BlocProvider(
                     create: (_) => SpaceBloc(
                       userProfile: widget.userProfile,
                       workspaceId: workspaceId,
                     )..add(
                         const SpaceEvent.initial(
-                          openFirstPage: false,  // 移动端不自动打开第一页
+                          openFirstPage: false,  // 移动端不自动打开第一页，让用户手动选择
                         ),
                       ),
                   ),
