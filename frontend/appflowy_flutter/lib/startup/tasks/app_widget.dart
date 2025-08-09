@@ -38,30 +38,58 @@ import 'package:universal_platform/universal_platform.dart';
 
 import 'prelude.dart';
 
+/// 应用Widget初始化任务
+/// 
+/// 功能说明：
+/// 1. 初始化应用的根Widget
+/// 2. 配置多语言支持
+/// 3. 设置全局主题
+/// 4. 初始化通知服务
+/// 5. 加载图标资源
+/// 
+/// 这是应用启动的核心任务，负责构建整个应用的Widget树
 class InitAppWidgetTask extends LaunchTask {
   const InitAppWidgetTask();
 
   @override
   LaunchTaskType get type => LaunchTaskType.appLauncher;
 
+  /// 初始化应用Widget
+  /// 
+  /// 执行流程：
+  /// 1. 确保Flutter绑定初始化
+  /// 2. 初始化通知服务
+  /// 3. 加载图标组资源
+  /// 4. 获取用户设置（外观、时间格式）
+  /// 5. 创建应用根Widget
+  /// 6. 配置多语言支持
+  /// 7. 启动应用
   @override
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
 
+    // 确保Flutter框架已初始化
     WidgetsFlutterBinding.ensureInitialized();
 
+    // 初始化通知服务（用于应用内通知）
     await NotificationService.initialize();
 
+    // 加载图标组（用于图标选择器）
     await loadIconGroups();
 
+    // 通过依赖注入获取入口点并创建主Widget
     final widget = context.getIt<EntryPoint>().create(context.config);
+    
+    // 获取用户的外观设置（主题、字体、语言等）
     final appearanceSetting =
         await UserSettingsBackendService().getAppearanceSetting();
+    
+    // 获取日期时间格式设置
     final dateTimeSettings =
         await UserSettingsBackendService().getDateTimeSettings();
 
-    // If the passed-in context is not the same as the context of the
-    // application widget, the application widget will be rebuilt.
+    // 创建应用根Widget
+    // 使用context作为key，确保context变化时重建Widget
     final app = ApplicationWidget(
       key: ValueKey(context),
       appearanceSetting: appearanceSetting,
@@ -70,49 +98,54 @@ class InitAppWidgetTask extends LaunchTask {
       child: widget,
     );
 
+    // 启动应用，配置多语言支持
     runApp(
       EasyLocalization(
+        // 支持的语言列表（按字母顺序排列）
         supportedLocales: const [
-          // In alphabetical order
-          Locale('am', 'ET'),
-          Locale('ar', 'SA'),
-          Locale('ca', 'ES'),
-          Locale('cs', 'CZ'),
-          Locale('ckb', 'KU'),
-          Locale('de', 'DE'),
-          Locale('en', 'US'),
-          Locale('en', 'GB'),
-          Locale('es', 'VE'),
-          Locale('eu', 'ES'),
-          Locale('el', 'GR'),
-          Locale('fr', 'FR'),
-          Locale('fr', 'CA'),
-          Locale('he'),
-          Locale('hu', 'HU'),
-          Locale('id', 'ID'),
-          Locale('it', 'IT'),
-          Locale('ja', 'JP'),
-          Locale('ko', 'KR'),
-          Locale('pl', 'PL'),
-          Locale('pt', 'BR'),
-          Locale('ru', 'RU'),
-          Locale('sv', 'SE'),
-          Locale('th', 'TH'),
-          Locale('tr', 'TR'),
-          Locale('uk', 'UA'),
-          Locale('ur'),
-          Locale('vi', 'VN'),
-          Locale('zh', 'CN'),
-          Locale('zh', 'TW'),
-          Locale('fa'),
-          Locale('hin'),
-          Locale('mr', 'IN'),
+          Locale('am', 'ET'),  // 阿姆哈拉语（埃塞俄比亚）
+          Locale('ar', 'SA'),  // 阿拉伯语（沙特）
+          Locale('ca', 'ES'),  // 加泰罗尼亚语（西班牙）
+          Locale('cs', 'CZ'),  // 捷克语
+          Locale('ckb', 'KU'), // 库尔德语
+          Locale('de', 'DE'),  // 德语
+          Locale('en', 'US'),  // 英语（美国）
+          Locale('en', 'GB'),  // 英语（英国）
+          Locale('es', 'VE'),  // 西班牙语（委内瑞拉）
+          Locale('eu', 'ES'),  // 巴斯克语（西班牙）
+          Locale('el', 'GR'),  // 希腊语
+          Locale('fr', 'FR'),  // 法语（法国）
+          Locale('fr', 'CA'),  // 法语（加拿大）
+          Locale('he'),        // 希伯来语
+          Locale('hu', 'HU'),  // 匈牙利语
+          Locale('id', 'ID'),  // 印度尼西亚语
+          Locale('it', 'IT'),  // 意大利语
+          Locale('ja', 'JP'),  // 日语
+          Locale('ko', 'KR'),  // 韩语
+          Locale('pl', 'PL'),  // 波兰语
+          Locale('pt', 'BR'),  // 葡萄牙语（巴西）
+          Locale('ru', 'RU'),  // 俄语
+          Locale('sv', 'SE'),  // 瑞典语
+          Locale('th', 'TH'),  // 泰语
+          Locale('tr', 'TR'),  // 土耳其语
+          Locale('uk', 'UA'),  // 乌克兰语
+          Locale('ur'),        // 乌尔都语
+          Locale('vi', 'VN'),  // 越南语
+          Locale('zh', 'CN'),  // 中文（简体）
+          Locale('zh', 'TW'),  // 中文（繁体）
+          Locale('fa'),        // 波斯语
+          Locale('hin'),       // 印地语
+          Locale('mr', 'IN'),  // 马拉地语（印度）
         ],
+        // 翻译文件路径
         path: 'assets/translations',
+        // 默认语言（当系统语言不支持时）
         fallbackLocale: const Locale('en', 'US'),
+        // 启用回退翻译
         useFallbackTranslations: true,
         child: Builder(
           builder: (context) {
+            // 初始化本地化服务
             getIt.get<EasyLocalizationService>().init(context);
             return app;
           },
@@ -124,6 +157,15 @@ class InitAppWidgetTask extends LaunchTask {
   }
 }
 
+/// 应用程序根Widget
+/// 
+/// 功能说明：
+/// 1. 管理全局状态（主题、语言、设置）
+/// 2. 提供全局的BLoC
+/// 3. 配置路由
+/// 4. 处理系统UI样式
+/// 
+/// 这是整个应用的状态容器，所有全局状态都在这里管理
 class ApplicationWidget extends StatefulWidget {
   const ApplicationWidget({
     super.key,
@@ -133,9 +175,13 @@ class ApplicationWidget extends StatefulWidget {
     required this.dateTimeSettings,
   });
 
+  /// 子Widget（通常是路由页面）
   final Widget child;
+  /// 应用主题
   final AppTheme appTheme;
+  /// 外观设置
   final AppearanceSettingsPB appearanceSetting;
+  /// 日期时间设置
   final DateTimeSettingsPB dateTimeSettings;
 
   @override
@@ -143,21 +189,29 @@ class ApplicationWidget extends StatefulWidget {
 }
 
 class _ApplicationWidgetState extends State<ApplicationWidget> {
+  /// 路由配置
+  /// 使用late final确保只初始化一次，避免主题变化时重建路由
   late final GoRouter routerConfig;
 
+  /// 命令面板通知器
+  /// 用于控制命令面板的显示和隐藏
   final _commandPaletteNotifier = ValueNotifier(CommandPaletteNotifierValue());
 
+  /// 主题构建器
+  /// 用于生成应用的明暗主题
   final themeBuilder = AppFlowyDefaultTheme();
 
   @override
   void initState() {
     super.initState();
-    // Avoid rebuild routerConfig when the appTheme is changed.
+    // 初始化路由配置
+    // 只在initState中初始化一次，避免主题变化时重建路由导致导航状态丢失
     routerConfig = generateRouter(widget.child);
   }
 
   @override
   void dispose() {
+    // 清理资源
     _commandPaletteNotifier.dispose();
     super.dispose();
   }
@@ -285,12 +339,21 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
     );
   }
 
+  /// 设置系统UI样式
+  /// 
+  /// Android平台特有：
+  /// 1. 启用边到边显示模式
+  /// 2. 设置透明导航栏
+  /// 
+  /// 这让应用内容可以延伸到状态栏和导航栏区域
   void _setSystemOverlayStyle(AppearanceSettingsState state) {
     if (Platform.isAndroid) {
+      // 设置边到边模式，隐藏系统UI
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.edgeToEdge,
-        overlays: [],
+        overlays: [],  // 不显示任何系统覆盖层
       );
+      // 设置透明导航栏
       SystemChrome.setSystemUIOverlayStyle(
         const SystemUiOverlayStyle(
           systemNavigationBarColor: Colors.transparent,
@@ -300,22 +363,45 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
   }
 }
 
+/// 应用全局对象
+/// 
+/// 提供全局访问点：
+/// - 导航器状态
+/// - 全局context
+/// 
+/// 使用场景：
+/// - 在没有context的地方进行导航
+/// - 获取全局context进行操作
 class AppGlobals {
+  /// 根导航器的全局key
   static GlobalKey<NavigatorState> rootNavKey = GlobalKey();
 
+  /// 获取导航器状态
   static NavigatorState get nav => rootNavKey.currentState!;
 
+  /// 获取全局context
   static BuildContext get context => rootNavKey.currentContext!;
 }
 
+/// 加载应用主题
+/// 
+/// 功能说明：
+/// 1. 根据主题名称加载对应的主题
+/// 2. 如果主题名为空或加载失败，使用默认主题
+/// 
+/// 参数：
+/// - [themeName]: 主题名称
+/// 
+/// 返回：
+/// - AppTheme对象
 Future<AppTheme> appTheme(String themeName) async {
   if (themeName.isEmpty) {
-    return AppTheme.fallback;
+    return AppTheme.fallback;  // 使用默认主题
   } else {
     try {
-      return await AppTheme.fromName(themeName);
+      return await AppTheme.fromName(themeName);  // 根据名称加载主题
     } catch (e) {
-      return AppTheme.fallback;
+      return AppTheme.fallback;  // 加载失败，使用默认主题
     }
   }
 }

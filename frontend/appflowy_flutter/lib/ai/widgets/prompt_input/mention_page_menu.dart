@@ -14,11 +14,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
 
-const double _itemHeight = 44.0;
-const double _noPageHeight = 20.0;
-const double _fixedWidth = 360.0;
-const double _maxHeight = 328.0;
+/// 界面常量定义
+const double _itemHeight = 44.0;     // 每个页面项的高度
+const double _noPageHeight = 20.0;   // 无页面提示的高度
+const double _fixedWidth = 360.0;    // 菜单固定宽度
+const double _maxHeight = 328.0;     // 菜单最大高度
 
+/// 提示词输入锚点
+/// 
+/// 用于定位@提及菜单的位置
+/// 包含输入框的key和层链接
 class PromptInputAnchor {
   PromptInputAnchor(this.anchorKey, this.layerLink);
 
@@ -26,6 +31,18 @@ class PromptInputAnchor {
   final LayerLink layerLink;
 }
 
+/// @提及页面菜单组件
+/// 
+/// 功能说明：
+/// 1. 显示可@提及的页面列表
+/// 2. 支持搜索过滤
+/// 3. 键盘导航（上下箭头）
+/// 4. 自动定位到光标位置
+/// 
+/// 设计特点：
+/// - 使用CompositedTransformFollower跟随输入框
+/// - 自动滚动到选中项
+/// - 显示页面图标、名称和路径
 class PromptInputMentionPageMenu extends StatefulWidget {
   const PromptInputMentionPageMenu({
     super.key,
@@ -108,6 +125,14 @@ class _PromptInputMentionPageMenuState
     );
   }
 
+  /// 计算弹出菜单的X偏移量
+  /// 
+  /// 功能说明：
+  /// 1. 根据@符号在输入框中的位置计算
+  /// 2. 使用TextPainter测量文本宽度
+  /// 3. 返回光标位置的x坐标
+  /// 
+  /// 确保菜单显示在@符号下方
   double getPopupOffsetX() {
     if (widget.anchor.anchorKey.currentContext == null) {
       return 0.0;
@@ -118,10 +143,12 @@ class _PromptInputMentionPageMenuState
       return 0.0;
     }
 
+    // 获取@符号结束位置
     final textPosition = TextPosition(offset: cubit.filterEndPosition);
     final renderBox =
         widget.anchor.anchorKey.currentContext?.findRenderObject() as RenderBox;
 
+    // 创建文本绘制器测量文本
     final textPainter = TextPainter(
       text: TextSpan(text: cubit.formatIntputText(widget.textController.text)),
       textDirection: TextDirection.ltr,
@@ -131,6 +158,7 @@ class _PromptInputMentionPageMenuState
       maxWidth: renderBox.size.width,
     );
 
+    // 获取光标偏移量
     final caretOffset = textPainter.getOffsetForCaret(textPosition, Rect.zero);
     final boxes = textPainter.getBoxesForSelection(
       TextSelection(
@@ -147,6 +175,18 @@ class _PromptInputMentionPageMenuState
   }
 }
 
+/// @提及页面列表组件
+/// 
+/// 功能说明：
+/// 1. 显示过滤后的页面列表
+/// 2. 支持键盘导航选择
+/// 3. 自动滚动到焦点项
+/// 4. 空状态和加载状态处理
+/// 
+/// 设计特点：
+/// - 使用SimpleAutoScrollController实现平滑滚动
+/// - BlocConsumer监听焦点变化
+/// - 列表项显示图标、标题和祖先路径
 class PromptInputMentionPageList extends StatefulWidget {
   const PromptInputMentionPageList({
     super.key,
@@ -261,6 +301,13 @@ class _PromptInputMentionPageListState
   }
 }
 
+/// 聊天提及页面项组件
+/// 
+/// 功能说明：
+/// 1. 显示单个可提及的页面
+/// 2. 包含图标、标题和路径
+/// 3. 支持选中高亮
+/// 4. 悬停显示完整名称
 class _ChatMentionPageItem extends StatelessWidget {
   const _ChatMentionPageItem({
     required this.view,
@@ -275,22 +322,22 @@ class _ChatMentionPageItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FlowyTooltip(
-      message: view.name,
+      message: view.name,  // 悬停显示完整名称
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
           child: FlowyHover(
-            isSelected: () => isSelected,
+            isSelected: () => isSelected,  // 键盘导航选中状态
             child: Container(
               height: _itemHeight,
               padding: const EdgeInsets.all(4.0),
               child: Row(
                 children: [
-                  MentionViewIcon(view: view),
+                  MentionViewIcon(view: view),  // 页面图标
                   const HSpace(8.0),
-                  Expanded(child: MentionViewTitleAndAncestors(view: view)),
+                  Expanded(child: MentionViewTitleAndAncestors(view: view)),  // 标题和路径
                 ],
               ),
             ),
@@ -301,6 +348,15 @@ class _ChatMentionPageItem extends StatelessWidget {
   }
 }
 
+/// 提及视图图标组件
+/// 
+/// 功能说明：
+/// 1. 显示页面的图标
+/// 2. 支持自定义emoji图标
+/// 3. 空间视图显示特殊图标
+/// 4. 默认显示布局类型图标
+/// 
+/// 优先级：自定义emoji > 空间图标 > 布局图标
 class MentionViewIcon extends StatelessWidget {
   const MentionViewIcon({
     super.key,
@@ -340,6 +396,18 @@ class MentionViewIcon extends StatelessWidget {
   }
 }
 
+/// 提及视图标题和祖先路径组件
+/// 
+/// 功能说明：
+/// 1. 显示页面标题
+/// 2. 显示页面的祖先路径（面包屑）
+/// 3. 路径过长时使用省略号
+/// 4. 空标题显示占位符
+/// 
+/// 设计特点：
+/// - 两行布局：标题在上，路径在下
+/// - 路径使用灰色小字体
+/// - 智能路径压缩（中间省略）
 class MentionViewTitleAndAncestors extends StatelessWidget {
   const MentionViewTitleAndAncestors({
     super.key,
@@ -354,12 +422,15 @@ class MentionViewTitleAndAncestors extends StatelessWidget {
       create: (_) => ViewTitleBarBloc(view: view),
       child: BlocBuilder<ViewTitleBarBloc, ViewTitleBarState>(
         builder: (context, state) {
+          // 处理空标题
           final nonEmptyName = view.name.isEmpty
               ? LocaleKeys.document_title_placeholder.tr()
               : view.name;
 
+          // 获取祖先路径字符串
           final ancestorList = _getViewAncestorList(state.ancestors);
 
+          // 无祖先路径时只显示标题
           if (state.ancestors.isEmpty || ancestorList.trim().isEmpty) {
             return FlowyText(
               nonEmptyName,
@@ -368,17 +439,18 @@ class MentionViewTitleAndAncestors extends StatelessWidget {
             );
           }
 
+          // 有祖先路径时显示两行
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               FlowyText(
-                nonEmptyName,
+                nonEmptyName,  // 页面标题
                 fontSize: 14.0,
                 figmaLineHeight: 20.0,
                 overflow: TextOverflow.ellipsis,
               ),
               FlowyText(
-                ancestorList,
+                ancestorList,  // 祖先路径
                 fontSize: 12.0,
                 figmaLineHeight: 16.0,
                 color: Theme.of(context).hintColor,
@@ -391,14 +463,21 @@ class MentionViewTitleAndAncestors extends StatelessWidget {
     );
   }
 
-  /// see workspace/presentation/widgets/view_title_bar.dart, upon which this
-  /// function was based. This version doesn't include the current view in the
-  /// result, and returns a string rather than a list of widgets
+  /// 获取视图祖先列表字符串
+  /// 
+  /// 功能说明：
+  /// 1. 跳过工作区名称（索引0）
+  /// 2. 不包含当前视图（最后一个）
+  /// 3. 路径过长时中间使用省略号
+  /// 4. 使用"/"分隔路径
+  /// 
+  /// 基于workspace/presentation/widgets/view_title_bar.dart实现
+  /// 但返回字符串而非组件列表
   String _getViewAncestorList(
     List<ViewPB> views,
   ) {
-    const lowerBound = 2;
-    final upperBound = views.length - 2;
+    const lowerBound = 2;  // 显示前两个
+    final upperBound = views.length - 2;  // 显示最后一个
     bool hasAddedEllipsis = false;
     String result = "";
 
@@ -406,11 +485,12 @@ class MentionViewTitleAndAncestors extends StatelessWidget {
       return "";
     }
 
-    // ignore the workspace name, use section name instead in the future
-    // skip the workspace view
+    // 跳过工作区视图（索引0），从索引1开始
+    // 不包含当前视图（最后一个）
     for (var i = 1; i < views.length - 1; i++) {
       final view = views[i];
 
+      // 中间部分用省略号代替
       if (i >= lowerBound && i < upperBound) {
         if (!hasAddedEllipsis) {
           hasAddedEllipsis = true;
@@ -419,14 +499,15 @@ class MentionViewTitleAndAncestors extends StatelessWidget {
         continue;
       }
 
+      // 处理空名称
       final nonEmptyName = view.name.isEmpty
           ? LocaleKeys.document_title_placeholder.tr()
           : view.name;
 
       result += nonEmptyName;
 
+      // 添加路径分隔符
       if (i != views.length - 2) {
-        // if not the last one, add a divider
         result += " / ";
       }
     }

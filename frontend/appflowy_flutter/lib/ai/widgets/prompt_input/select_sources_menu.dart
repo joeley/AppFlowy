@@ -21,6 +21,17 @@ import '../view_selector.dart';
 import 'layout_define.dart';
 import 'mention_page_menu.dart';
 
+/// 桌面端AI提示词数据源选择按钮
+/// 
+/// 功能说明：
+/// 1. 显示已选择的数据源数量
+/// 2. 点击打开数据源选择弹出层
+/// 3. 支持多选文档作为AI参考数据
+/// 4. 最多选择3个父页面
+/// 
+/// 使用场景：
+/// - AI对话中选择相关文档作为上下文
+/// - 让AI基于特定文档生成回复
 class PromptInputDesktopSelectSourcesButton extends StatefulWidget {
   const PromptInputDesktopSelectSourcesButton({
     super.key,
@@ -28,7 +39,9 @@ class PromptInputDesktopSelectSourcesButton extends StatefulWidget {
     required this.onUpdateSelectedSources,
   });
 
+  /// 已选择数据源ID列表的通知器
   final ValueNotifier<List<String>> selectedSourcesNotifier;
+  /// 更新选中数据源的回调
   final void Function(List<String>) onUpdateSelectedSources;
 
   @override
@@ -38,17 +51,21 @@ class PromptInputDesktopSelectSourcesButton extends StatefulWidget {
 
 class _PromptInputDesktopSelectSourcesButtonState
     extends State<PromptInputDesktopSelectSourcesButton> {
+  /// 视图选择器状态管理器
   late final cubit = ViewSelectorCubit(
-    maxSelectedParentPageCount: 3,
+    maxSelectedParentPageCount: 3,  // 最多选择3个父页面
     getIgnoreViewType: (item) {
       final view = item.view;
 
+      // 空间视图正常显示
       if (view.isSpace) {
         return IgnoreViewType.none;
       }
+      // 聊天视图隐藏
       if (view.layout == ViewLayoutPB.Chat) {
         return IgnoreViewType.hide;
       }
+      // 非文档视图禁用（如数据库、看板）
       if (view.layout != ViewLayoutPB.Document) {
         return IgnoreViewType.disable;
       }
@@ -56,12 +73,15 @@ class _PromptInputDesktopSelectSourcesButtonState
       return IgnoreViewType.none;
     },
   );
+  /// 弹出层控制器
   final popoverController = PopoverController();
 
   @override
   void initState() {
     super.initState();
+    // 监听选中数据源变化
     widget.selectedSourcesNotifier.addListener(onSelectedSourcesChanged);
+    // 初始化时同步状态
     WidgetsBinding.instance.addPostFrameCallback((_) {
       onSelectedSourcesChanged();
     });
@@ -115,6 +135,9 @@ class _PromptInputDesktopSelectSourcesButtonState
     );
   }
 
+  /// 处理选中数据源变化
+  /// 
+  /// 同步外部状态到内部Cubit
   void onSelectedSourcesChanged() {
     cubit
       ..updateSelectedSources(widget.selectedSourcesNotifier.value)
@@ -122,6 +145,12 @@ class _PromptInputDesktopSelectSourcesButtonState
   }
 }
 
+/// 数据源选择指示器按钮
+/// 
+/// 功能：
+/// 1. 显示页面图标和选中数量
+/// 2. 当前页面被选中时显示"当前页面"
+/// 3. 悬停效果提升交互体验
 class _IndicatorButton extends StatelessWidget {
   const _IndicatorButton({
     required this.selectedSourcesNotifier,
@@ -155,8 +184,10 @@ class _IndicatorButton extends StatelessWidget {
                 ValueListenableBuilder(
                   valueListenable: selectedSourcesNotifier,
                   builder: (context, selectedSourceIds, _) {
+                    // 获取当前文档ID
                     final documentId =
                         context.read<DocumentBloc?>()?.documentId;
+                    // 如果只选中当前文档，显示"当前页面"，否则显示数量
                     final label = documentId != null &&
                             selectedSourceIds.length == 1 &&
                             selectedSourceIds[0] == documentId
@@ -185,6 +216,12 @@ class _IndicatorButton extends StatelessWidget {
   }
 }
 
+/// 数据源选择弹出层内容
+/// 
+/// 布局结构：
+/// 1. 搜索框：过滤可选数据源
+/// 2. 已选择列表：显示已选中的数据源
+/// 3. 可选择列表：显示所有可选数据源
 class _PopoverContent extends StatelessWidget {
   const _PopoverContent();
 
@@ -233,6 +270,9 @@ class _PopoverContent extends StatelessWidget {
     );
   }
 
+  /// 构建已选择数据源列表
+  /// 
+  /// 显示已选中的数据源，点击可取消选择
   Iterable<Widget> _buildSelectedSources(
     BuildContext context,
     ViewSelectorState state,
@@ -245,8 +285,9 @@ class _PopoverContent extends StatelessWidget {
         viewSelectorItem: e,
         level: 0,
         isDescendentOfSpace: e.view.isSpace,
-        isSelectedSection: true,
+        isSelectedSection: true,  // 标记为已选择区域
         onSelected: (item) {
+          // 切换选中状态
           context.read<ViewSelectorCubit>().toggleSelectedStatus(item, true);
         },
         height: 30.0,
@@ -254,6 +295,9 @@ class _PopoverContent extends StatelessWidget {
     );
   }
 
+  /// 构建可选择数据源列表
+  /// 
+  /// 显示所有可选数据源，支持搜索过滤
   Iterable<Widget> _buildVisibleSources(
     BuildContext context,
     ViewSelectorState state,
@@ -266,8 +310,9 @@ class _PopoverContent extends StatelessWidget {
         viewSelectorItem: e,
         level: 0,
         isDescendentOfSpace: e.view.isSpace,
-        isSelectedSection: false,
+        isSelectedSection: false,  // 标记为可选择区域
         onSelected: (item) {
+          // 切换选中状态
           context.read<ViewSelectorCubit>().toggleSelectedStatus(item, false);
         },
         height: 30.0,
@@ -276,6 +321,18 @@ class _PopoverContent extends StatelessWidget {
   }
 }
 
+/// 视图选择器树形列表项
+/// 
+/// 功能说明：
+/// 1. 显示单个视图项及其子视图
+/// 2. 支持展开/折叠子视图
+/// 3. 支持多选状态管理
+/// 4. 支持禁用和提示
+/// 
+/// 设计特点：
+/// - 递归渲染子视图
+/// - 缩进显示层级关系
+/// - 悬停显示操作按钮
 class ViewSelectorTreeItem extends StatefulWidget {
   const ViewSelectorTreeItem({
     super.key,
@@ -290,23 +347,31 @@ class ViewSelectorTreeItem extends StatefulWidget {
     this.showCheckbox = true,
   });
 
+  /// 视图选择项数据
   final ViewSelectorItem viewSelectorItem;
 
-  /// nested level of the view item
+  /// 嵌套层级（用于计算缩进）
   final int level;
 
+  /// 是否为空间的子视图
   final bool isDescendentOfSpace;
 
+  /// 是否在已选择区域
   final bool isSelectedSection;
 
+  /// 选择回调
   final void Function(ViewSelectorItem viewSelectorItem) onSelected;
 
+  /// 添加回调（可选）
   final void Function(ViewSelectorItem viewSelectorItem)? onAdd;
 
+  /// 是否显示保存按钮
   final bool showSaveButton;
 
+  /// 项目高度
   final double height;
 
+  /// 是否显示复选框
   final bool showCheckbox;
 
   @override
@@ -330,19 +395,21 @@ class _ViewSelectorTreeItemState extends State<ViewSelectorTreeItem> {
       ),
     );
 
+    // 禁用状态处理：添加半透明遮罩和禁用光标
     final disabledEnabledChild = widget.viewSelectorItem.isDisabled
         ? FlowyTooltip(
+            // 根据视图类型显示不同提示
             message: widget.showCheckbox
                 ? switch (widget.viewSelectorItem.view.layout) {
                     ViewLayoutPB.Document =>
-                      LocaleKeys.chat_sourcesLimitReached.tr(),
-                    _ => LocaleKeys.chat_sourceUnsupported.tr(),
+                      LocaleKeys.chat_sourcesLimitReached.tr(),  // 达到选择上限
+                    _ => LocaleKeys.chat_sourceUnsupported.tr(),  // 不支持的类型
                   }
                 : "",
             child: Opacity(
               opacity: 0.5,
               child: MouseRegion(
-                cursor: SystemMouseCursors.forbidden,
+                cursor: SystemMouseCursors.forbidden,  // 禁止光标
                 child: IgnorePointer(child: child),
               ),
             ),
@@ -386,6 +453,14 @@ class _ViewSelectorTreeItemState extends State<ViewSelectorTreeItem> {
   }
 }
 
+/// 视图选择器树形列表项内部组件
+/// 
+/// 布局结构：
+/// 1. 展开/折叠按钮
+/// 2. 复选框（可选）
+/// 3. 视图图标
+/// 4. 视图名称
+/// 5. 操作按钮（悬停显示）
 class ViewSelectorTreeItemInner extends StatelessWidget {
   const ViewSelectorTreeItemInner({
     super.key,
@@ -491,6 +566,12 @@ class ViewSelectorTreeItemInner extends StatelessWidget {
   }
 }
 
+/// 展开/折叠按钮组件
+/// 
+/// 显示规则：
+/// 1. 引用的数据库视图：显示点
+/// 2. 没有子视图：显示空白
+/// 3. 有子视图：显示展开/折叠箭头
 class ToggleIsExpandedButton extends StatelessWidget {
   const ToggleIsExpandedButton({
     super.key,
@@ -533,6 +614,9 @@ class ToggleIsExpandedButton extends StatelessWidget {
   }
 }
 
+/// 点图标组件
+/// 
+/// 用于标识引用的数据库视图
 class _DotIconWidget extends StatelessWidget {
   const _DotIconWidget();
 
@@ -552,6 +636,12 @@ class _DotIconWidget extends StatelessWidget {
   }
 }
 
+/// 数据源选中状态复选框
+/// 
+/// 显示三种状态：
+/// 1. 未选中：空复选框
+/// 2. 已选中：勾选复选框
+/// 3. 部分选中：半勾选复选框（子视图部分选中）
 class SourceSelectedStatusCheckbox extends StatelessWidget {
   const SourceSelectedStatusCheckbox({
     super.key,

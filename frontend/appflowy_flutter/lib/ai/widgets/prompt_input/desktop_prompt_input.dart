@@ -15,6 +15,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'browse_prompts_button.dart';
 
+/// 提示词输入提交回调类型定义
+/// 
+/// 参数说明：
+/// - [input]: 用户输入的文本内容
+/// - [predefinedFormat]: 预定义格式（如表格、列表等）
+/// - [metadata]: 元数据（包含附件、提及页面等）
+/// - [promptId]: 选中的提示词ID
 typedef OnPromptInputSubmitted = void Function(
   String input,
   PredefinedFormat? predefinedFormat,
@@ -22,6 +29,21 @@ typedef OnPromptInputSubmitted = void Function(
   String? promptId,
 );
 
+/// 桌面端AI提示词输入组件
+/// 
+/// 功能架构：
+/// 1. 多行文本输入框，支持@提及页面
+/// 2. 文件附件上传（PDF、TXT、MD）
+/// 3. 预定义格式选择（表格、列表等）
+/// 4. 数据源选择（选择要搜索的页面）
+/// 5. AI模型选择
+/// 6. 提示词模板浏览和选择
+/// 
+/// 设计特点：
+/// - 复杂的状态管理（流式输出、输入状态、格式选择）
+/// - 键盘快捷键支持（Enter发送、Esc取消等）
+/// - 响应式布局，自适应内容高度
+/// - 丰富的交互反馈（悬停、聚焦、禁用状态）
 class DesktopPromptInput extends StatefulWidget {
   const DesktopPromptInput({
     super.key,
@@ -36,14 +58,23 @@ class DesktopPromptInput extends StatefulWidget {
     this.extraBottomActionButton,
   });
 
+  /// AI是否正在生成回复（流式输出状态）
   final bool isStreaming;
+  /// 文本输入控制器，支持特殊格式处理
   final AiPromptInputTextEditingController textController;
+  /// 停止流式生成的回调
   final void Function() onStopStreaming;
+  /// 提交输入的回调函数
   final OnPromptInputSubmitted onSubmitted;
+  /// 选中数据源的通知器
   final ValueNotifier<List<String>> selectedSourcesNotifier;
+  /// 更新选中数据源的回调
   final void Function(List<String>) onUpdateSelectedSources;
+  /// 是否隐藏边框装饰
   final bool hideDecoration;
+  /// 是否隐藏格式选择按钮
   final bool hideFormats;
+  /// 额外的底部操作按钮
   final Widget? extraBottomActionButton;
 
   @override
@@ -51,39 +82,49 @@ class DesktopPromptInput extends StatefulWidget {
 }
 
 class _DesktopPromptInputState extends State<DesktopPromptInput> {
+  /// 文本输入框的全局键，用于定位
   final textFieldKey = GlobalKey();
+  /// 图层链接，用于@提及菜单定位
   final layerLink = LayerLink();
+  /// 弹出层控制器，管理@提及菜单显示
   final overlayController = OverlayPortalController();
+  /// 输入控制状态管理器
   final inputControlCubit = ChatInputControlCubit();
+  /// 聊天用户状态管理器
   final chatUserCubit = ChatUserCubit();
+  /// 焦点节点，管理输入框焦点
   final focusNode = FocusNode();
 
+  /// 发送按钮状态（启用/禁用/流式）
   late SendButtonState sendButtonState;
+  /// 是否正在输入（IME组合状态）
   bool isComposing = false;
 
   @override
   void initState() {
     super.initState();
 
+    // 监听文本变化，处理@提及和发送按钮状态
     widget.textController.addListener(handleTextControllerChanged);
     focusNode
       ..addListener(
         () {
           if (!widget.hideDecoration) {
-            setState(() {}); // refresh border color
+            setState(() {}); // 刷新边框颜色
           }
           if (!focusNode.hasFocus) {
-            cancelMentionPage(); // hide menu when lost focus
+            cancelMentionPage(); // 失去焦点时隐藏@提及菜单
           }
         },
       )
-      ..onKeyEvent = handleKeyEvent;
+      ..onKeyEvent = handleKeyEvent;  // 处理键盘事件
 
     updateSendButtonState();
 
+    // 初始化后自动聚焦，并检查是否从命令面板跳转而来
     WidgetsBinding.instance.addPostFrameCallback((_) {
       focusNode.requestFocus();
-      checkForAskingAI();
+      checkForAskingAI();  // 检查是否需要自动执行AI查询
     });
   }
 
@@ -235,36 +276,64 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     );
   }
 
+  /// 检查是否从命令面板触发的AI查询
+  /// 
+  /// 功能说明：
+  /// 1. 从命令面板状态读取查询内容
+  /// 2. 获取选中的数据源
+  /// 3. 自动提交查询
   void checkForAskingAI() {
     final paletteBloc = context.read<CommandPaletteBloc?>(),
         paletteState = paletteBloc?.state;
     if (paletteBloc == null || paletteState == null) return;
+    
+    // 检查是否是AI查询模式
     final isAskingAI = paletteState.askAI;
     if (!isAskingAI) return;
+    
+    // 标记已处理，避免重复执行
     paletteBloc.add(CommandPaletteEvent.askedAI());
+    
+    // 获取查询内容
     final query = paletteState.query ?? '';
     if (query.isEmpty) return;
+    
+    // 获取选中的数据源
     final sources = (paletteState.askAISources ?? []).map((e) => e.id).toList();
+    
+    // 获取元数据和提示词配置
     final metadata =
         context.read<AIPromptInputBloc?>()?.consumeMetadata() ?? {};
     final promptBloc = context.read<AIPromptInputBloc?>();
     final promptId = promptBloc?.promptId;
     final promptState = promptBloc?.state;
     final predefinedFormat = promptState?.predefinedFormat;
+    
+    // 更新数据源并提交查询
     if (sources.isNotEmpty) {
       widget.onUpdateSelectedSources(sources);
     }
     widget.onSubmitted.call(query, predefinedFormat, metadata, promptId ?? '');
   }
 
+  /// 从按钮触发@提及功能
+  /// 
+  /// 流程：
+  /// 1. 确保输入框获得焦点
+  /// 2. 插入@符号
+  /// 3. 显示页面选择菜单
   void startMentionPageFromButton() {
+    // 避免重复显示
     if (overlayController.isShowing) {
       return;
     }
+    // 确保输入框聚焦
     if (!focusNode.hasFocus) {
       focusNode.requestFocus();
     }
+    // 插入@符号
     widget.textController.text += '@';
+    // 下一帧显示菜单，确保@符号已渲染
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (context.mounted) {
         context
@@ -292,26 +361,40 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     }
   }
 
+  /// 处理发送操作
+  /// 
+  /// 功能流程：
+  /// 1. 验证是否可发送（非流式状态、有内容）
+  /// 2. 格式化输入文本
+  /// 3. 收集元数据（附件、提及页面）
+  /// 4. 获取格式设置
+  /// 5. 调用提交回调
   void handleSend() {
+    // 流式输出时不能发送新消息
     if (widget.isStreaming) {
       return;
     }
+    
+    // 处理和格式化输入文本
     String userInput = widget.textController.text.trim();
-    userInput = inputControlCubit.formatIntputText(userInput);
-    userInput = AiPromptInputTextEditingController.restore(userInput);
+    userInput = inputControlCubit.formatIntputText(userInput);  // 格式化@提及
+    userInput = AiPromptInputTextEditingController.restore(userInput);  // 还原特殊字符
 
+    // 清空输入框
     widget.textController.clear();
     if (userInput.isEmpty) {
       return;
     }
 
-    // get the attached files and mentioned pages
+    // 获取附件和提及页面的元数据
     final metadata = context.read<AIPromptInputBloc>().consumeMetadata();
 
+    // 获取格式设置
     final bloc = context.read<AIPromptInputBloc>();
     final showPredefinedFormats = bloc.state.showPredefinedFormats;
     final predefinedFormat = bloc.state.predefinedFormat;
 
+    // 提交输入
     widget.onSubmitted(
       userInput,
       showPredefinedFormats ? predefinedFormat : null,
@@ -533,14 +616,24 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     };
   }
 
+  /// 处理选择提示词
+  /// 
+  /// 功能：
+  /// 1. 清空已提及的页面
+  /// 2. 更新提示词ID
+  /// 3. 替换输入框内容为提示词模板
+  /// 4. 隐藏预定义格式栏（如果显示）
   void handleOnSelectPrompt(AiPrompt prompt) {
     final bloc = context.read<AIPromptInputBloc>();
+    // 重置状态：清空提及页面，设置提示词ID
     bloc
       ..add(AIPromptInputEvent.updateMentionedViews([]))
       ..add(AIPromptInputEvent.updatePromptId(prompt.id));
 
+    // 处理提示词内容中的特殊字符
     final content = AiPromptInputTextEditingController.replace(prompt.content);
 
+    // 设置输入框内容，光标移到末尾
     widget.textController.value = TextEditingValue(
       text: content,
       selection: TextSelection.collapsed(
@@ -548,6 +641,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
       ),
     );
 
+    // 隐藏格式选择栏，避免与提示词冲突
     if (bloc.state.showPredefinedFormats) {
       bloc.add(
         AIPromptInputEvent.toggleShowPredefinedFormat(),
@@ -556,22 +650,37 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
   }
 }
 
+/// 提交或选择提及页面的意图
+/// Enter键触发：有@菜单时选择页面，否则发送消息
 class _SubmitOrMentionPageIntent extends Intent {
   const _SubmitOrMentionPageIntent();
 }
 
+/// 取消@提及菜单的意图
+/// Esc键触发
 class _CancelMentionPageIntent extends Intent {
   const _CancelMentionPageIntent();
 }
 
+/// 聚焦上一个项目的意图
+/// 上箭头键触发
 class _FocusPreviousItemIntent extends Intent {
   const _FocusPreviousItemIntent();
 }
 
+/// 聚焦下一个项目的意图
+/// 下箭头键触发
 class _FocusNextItemIntent extends Intent {
   const _FocusNextItemIntent();
 }
 
+/// 提示词输入文本框组件
+/// 
+/// 功能：
+/// 1. 多行文本输入
+/// 2. 动态内边距（适应格式栏和操作栏）
+/// 3. 可编辑状态控制
+/// 4. 自定义提示文本
 class PromptInputTextField extends StatelessWidget {
   const PromptInputTextField({
     super.key,
@@ -583,11 +692,17 @@ class PromptInputTextField extends StatelessWidget {
     this.hintText = "",
   });
 
+  /// 输入控制状态管理器
   final ChatInputControlCubit cubit;
+  /// 文本控制器
   final TextEditingController textController;
+  /// 焦点节点
   final FocusNode textFieldFocusNode;
+  /// 内容内边距
   final EdgeInsetsGeometry contentPadding;
+  /// 是否可编辑
   final bool editable;
+  /// 提示文本
   final String hintText;
 
   @override
@@ -628,6 +743,17 @@ class PromptInputTextField extends StatelessWidget {
   }
 }
 
+/// 提示词输入框底部操作栏
+/// 
+/// 功能组件：
+/// 1. 格式选择按钮
+/// 2. 模型选择菜单
+/// 3. 浏览提示词按钮
+/// 4. 数据源选择按钮
+/// 5. 文件附件按钮
+/// 6. 发送/停止按钮
+/// 
+/// 布局：左侧功能按钮，右侧操作按钮
 class _PromptBottomActions extends StatelessWidget {
   const _PromptBottomActions({
     required this.sendButtonState,
@@ -720,19 +846,24 @@ class _PromptBottomActions extends StatelessWidget {
   //   );
   // }
 
+  /// 构建附件上传按钮
+  /// 
+  /// 支持上传PDF、TXT、MD格式文件
   Widget _attachmentButton(BuildContext context) {
     return PromptInputAttachmentButton(
       onTap: () async {
+        // 打开文件选择器
         final path = await getIt<FilePickerService>().pickFiles(
           dialogTitle: '',
           type: FileType.custom,
-          allowedExtensions: ["pdf", "txt", "md"],
+          allowedExtensions: ["pdf", "txt", "md"],  // 支持的文件格式
         );
 
         if (path == null) {
           return;
         }
 
+        // 添加选中的文件到状态中
         for (final file in path.files) {
           if (file.path != null && context.mounted) {
             context
@@ -744,6 +875,9 @@ class _PromptBottomActions extends StatelessWidget {
     );
   }
 
+  /// 构建发送按钮
+  /// 
+  /// 根据状态显示发送或停止图标
   Widget _sendButton() {
     return PromptInputSendButton(
       state: sendButtonState,

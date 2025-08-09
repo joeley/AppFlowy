@@ -20,6 +20,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'select_sources_menu.dart';
 
+/// 移动端选择数据源按钮
+/// 
+/// 功能说明：
+/// 1. 显示已选择的数据源数量
+/// 2. 点击打开底部弹窗选择数据源
+/// 3. 支持多选文档作为AI参考
+/// 4. 最多选择3个父页面
+/// 
+/// 设计特点：
+/// - 适配移动端交互
+/// - 底部弹窗式选择器
+/// - 实时显示选中数量
 class PromptInputMobileSelectSourcesButton extends StatefulWidget {
   const PromptInputMobileSelectSourcesButton({
     super.key,
@@ -37,12 +49,15 @@ class PromptInputMobileSelectSourcesButton extends StatefulWidget {
 
 class _PromptInputMobileSelectSourcesButtonState
     extends State<PromptInputMobileSelectSourcesButton> {
+  /// 视图选择器状态管理器
   late final cubit = ViewSelectorCubit(
-    maxSelectedParentPageCount: 3,
+    maxSelectedParentPageCount: 3,  // 最多选择3个父页面
     getIgnoreViewType: (item) {
+      // 空间视图正常显示
       if (item.view.isSpace) {
         return IgnoreViewType.none;
       }
+      // 非文档视图隐藏（不支持数据库、看板等）
       if (item.view.layout != ViewLayoutPB.Document) {
         return IgnoreViewType.hide;
       }
@@ -163,6 +178,9 @@ class _PromptInputMobileSelectSourcesButtonState
     );
   }
 
+  /// 处理选中数据源变化
+  /// 
+  /// 同步外部状态到内部Cubit
   void onSelectedSourcesChanged() {
     cubit
       ..updateSelectedSources(widget.selectedSourcesNotifier.value)
@@ -170,6 +188,18 @@ class _PromptInputMobileSelectSourcesButtonState
   }
 }
 
+/// 移动端选择数据源底部弹窗主体
+/// 
+/// 功能说明：
+/// 1. 固定头部：标题和搜索框
+/// 2. 已选择列表：显示已选中的数据源
+/// 3. 可选择列表：显示所有可选数据源
+/// 4. 支持搜索过滤和展开/折叠
+/// 
+/// 设计特点：
+/// - 使用CustomScrollView实现复杂布局
+/// - SliverPersistentHeader固定头部
+/// - 分区显示已选和可选项
 class _MobileSelectSourcesSheetBody extends StatelessWidget {
   const _MobileSelectSourcesSheetBody({
     required this.scrollController,

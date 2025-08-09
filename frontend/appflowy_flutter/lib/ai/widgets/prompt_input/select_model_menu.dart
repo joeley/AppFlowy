@@ -8,12 +8,23 @@ import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+/// AI模型选择菜单组件
+/// 
+/// 功能说明：
+/// 1. 显示当前选中的AI模型
+/// 2. 点击打开模型列表选择弹出层
+/// 3. 支持本地模型和云端模型切换
+/// 
+/// 使用场景：
+/// - 在AI对话中选择不同的模型获得不同的回复效果
+/// - 支持多种模型（GPT、Claude、本地模型等）
 class SelectModelMenu extends StatefulWidget {
   const SelectModelMenu({
     super.key,
     required this.aiModelStateNotifier,
   });
 
+  /// AI模型状态通知器
   final AIModelStateNotifier aiModelStateNotifier;
 
   @override
@@ -66,6 +77,16 @@ class _SelectModelMenuState extends State<SelectModelMenu> {
   }
 }
 
+/// 模型选择弹出层内容
+/// 
+/// 功能说明：
+/// 1. 将模型分为本地模型和云端模型两组
+/// 2. 每组显示标题和模型列表
+/// 3. 支持滚动查看所有模型
+/// 
+/// 布局结构：
+/// - 本地模型组（如果有）
+/// - 云端模型组（如果有）
 class SelectModelPopoverContent extends StatelessWidget {
   const SelectModelPopoverContent({
     super.key,
@@ -74,8 +95,11 @@ class SelectModelPopoverContent extends StatelessWidget {
     this.onSelectModel,
   });
 
+  /// 所有可用的AI模型列表
   final List<AIModelPB> models;
+  /// 当前选中的模型
   final AIModelPB? selectedModel;
+  /// 选择模型的回调
   final void Function(AIModelPB)? onSelectModel;
 
   @override
@@ -84,7 +108,7 @@ class SelectModelPopoverContent extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    // separate models into local and cloud models
+    // 将模型分为本地模型和云端模型
     final localModels = models.where((model) => model.isLocal).toList();
     final cloudModels = models.where((model) => !model.isLocal).toList();
 
@@ -129,11 +153,15 @@ class SelectModelPopoverContent extends StatelessWidget {
   }
 }
 
+/// 模型分组标题组件
+/// 
+/// 用于显示"本地模型"或"云端模型"等分组标题
 class _ModelSectionHeader extends StatelessWidget {
   const _ModelSectionHeader({
     required this.title,
   });
 
+  /// 分组标题文本
   final String title;
 
   @override
@@ -151,6 +179,16 @@ class _ModelSectionHeader extends StatelessWidget {
   }
 }
 
+/// 模型列表项组件
+/// 
+/// 功能说明：
+/// 1. 显示模型名称和描述
+/// 2. 选中状态显示勾选图标
+/// 3. 悬停效果提升交互体验
+/// 
+/// 设计特点：
+/// - 最小高度32px，保证点击区域
+/// - 文本超长时省略显示
 class _ModelItem extends StatelessWidget {
   const _ModelItem({
     required this.model,
@@ -158,8 +196,11 @@ class _ModelItem extends StatelessWidget {
     required this.onTap,
   });
 
+  /// AI模型数据
   final AIModelPB model;
+  /// 是否被选中
   final bool isSelected;
+  /// 点击回调
   final VoidCallback onTap;
 
   @override
@@ -172,11 +213,13 @@ class _ModelItem extends StatelessWidget {
         text: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 模型名称
             FlowyText(
               model.i18n,
               figmaLineHeight: 20,
               overflow: TextOverflow.ellipsis,
             ),
+            // 模型描述（如果有）
             if (model.desc.isNotEmpty)
               FlowyText(
                 model.desc,
@@ -187,6 +230,7 @@ class _ModelItem extends StatelessWidget {
               ),
           ],
         ),
+        // 选中状态显示勾选图标
         rightIcon: isSelected
             ? FlowySvg(
                 FlowySvgs.check_s,
@@ -199,13 +243,25 @@ class _ModelItem extends StatelessWidget {
   }
 }
 
+/// 当前模型显示按钮
+/// 
+/// 功能说明：
+/// 1. 显示AI图标和当前模型名称
+/// 2. 默认模型只显示图标
+/// 3. 点击打开模型选择列表
+/// 
+/// 设计特点：
+/// - 简洁的图标+文本布局
+/// - 悬停提示功能说明
 class _CurrentModelButton extends StatelessWidget {
   const _CurrentModelButton({
     required this.model,
     required this.onTap,
   });
 
+  /// 当前选中的模型
   final AIModelPB? model;
+  /// 点击回调
   final VoidCallback onTap;
 
   @override
@@ -235,11 +291,12 @@ class _CurrentModelButton extends StatelessWidget {
                       size: Size.square(16),
                     ),
                   ),
+                  // 非默认模型显示模型名称
                   if (model != null && !model!.isDefault)
                     Padding(
                       padding: EdgeInsetsDirectional.only(end: 2.0),
                       child: FlowyText(
-                        model!.i18n,
+                        model!.i18n,  // 国际化模型名称
                         fontSize: 12,
                         figmaLineHeight: 16,
                         color: Theme.of(context).hintColor,
