@@ -22,14 +22,29 @@ import 'package:provider/provider.dart';
 
 import 'ai_bubble_button.dart';
 
+/// 全局通知器，用于触发创建新的AI聊天
 final ValueNotifier<int> mobileCreateNewAIChatNotifier = ValueNotifier(0);
 
+/// 移动端主页Tab页面
+/// 
+/// 功能说明：
+/// 1. 管理多个Tab页面（最近、空间、收藏、共享）
+/// 2. 支持Tab重新排序
+/// 3. 处理快速创建文档和AI聊天
+/// 4. 监听页面创建和工作区事件
+/// 
+/// 核心功能：
+/// - Tab栏管理和切换
+/// - 快速创建入口
+/// - 工作区相关操作
+/// - AI聊天浮动按钮（仅服务器工作区）
 class MobileHomePageTab extends StatefulWidget {
   const MobileHomePageTab({
     super.key,
     required this.userProfile,
   });
 
+  /// 用户信息
   final UserProfilePB userProfile;
 
   @override
@@ -38,22 +53,26 @@ class MobileHomePageTab extends StatefulWidget {
 
 class _MobileHomePageTabState extends State<MobileHomePageTab>
     with SingleTickerProviderStateMixin {
+  /// Tab控制器，管理Tab切换
   TabController? tabController;
 
   @override
   void initState() {
     super.initState();
 
-    mobileCreateNewPageNotifier.addListener(_createNewDocument);
-    mobileCreateNewAIChatNotifier.addListener(_createNewAIChat);
-    mobileLeaveWorkspaceNotifier.addListener(_leaveWorkspace);
+    // 监听全局通知器
+    mobileCreateNewPageNotifier.addListener(_createNewDocument);  // 创建新文档
+    mobileCreateNewAIChatNotifier.addListener(_createNewAIChat);  // 创建新AI聊天
+    mobileLeaveWorkspaceNotifier.addListener(_leaveWorkspace);  // 离开工作区
   }
 
   @override
   void dispose() {
+    // 清理Tab控制器
     tabController?.removeListener(_onTabChange);
     tabController?.dispose();
 
+    // 移除全局监听器
     mobileCreateNewPageNotifier.removeListener(_createNewDocument);
     mobileCreateNewAIChatNotifier.removeListener(_createNewAIChat);
     mobileLeaveWorkspaceNotifier.removeListener(_leaveWorkspace);
@@ -67,12 +86,14 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
       value: widget.userProfile,
       child: MultiBlocListener(
         listeners: [
+          // 监听空间中创建的新页面
           BlocListener<SpaceBloc, SpaceState>(
             listenWhen: (p, c) =>
                 p.lastCreatedPage?.id != c.lastCreatedPage?.id,
             listener: (context, state) {
               final lastCreatedPage = state.lastCreatedPage;
               if (lastCreatedPage != null) {
+                // 导航到新创建的页面
                 context.pushView(
                   lastCreatedPage,
                   tabs: [
@@ -84,12 +105,14 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
               }
             },
           ),
+          // 监听侧边栏部分中创建的新页面
           BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
             listenWhen: (p, c) =>
                 p.lastCreatedRootView?.id != c.lastCreatedRootView?.id,
             listener: (context, state) {
               final lastCreatedPage = state.lastCreatedRootView;
               if (lastCreatedPage != null) {
+                // 导航到新创建的根视图
                 context.pushView(
                   lastCreatedPage,
                   tabs: [
@@ -137,6 +160,12 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     );
   }
 
+  /// 初始化Tab控制器
+  /// 
+  /// 功能说明：
+  /// 1. 创建TabController
+  /// 2. 设置初始索引为默认Tab
+  /// 3. 添加Tab切换监听器
   void _initTabController(SpaceOrderState state) {
     if (tabController != null) {
       return;
@@ -144,31 +173,44 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     tabController = TabController(
       length: state.tabsOrder.length,
       vsync: this,
-      initialIndex: state.tabsOrder.indexOf(state.defaultTab),
+      initialIndex: state.tabsOrder.indexOf(state.defaultTab),  // 设置默认Tab
     );
     tabController?.addListener(_onTabChange);
   }
 
+  /// Tab切换回调
+  /// 记录用户最后打开的Tab
   void _onTabChange() {
     if (tabController == null) {
       return;
     }
+    // 更新最后打开的Tab索引
     context
         .read<SpaceOrderBloc>()
         .add(SpaceOrderEvent.open(tabController!.index));
   }
 
+  /// 构建Tab页面内容
+  /// 
+  /// 根据Tab类型返回对应的页面组件：
+  /// - recent: 最近访问页面
+  /// - spaces: 空间页面（可能包含AI浮动按钮）
+  /// - favorites: 收藏页面
+  /// - shared: 共享页面
   List<Widget> _buildTabs(SpaceOrderState state) {
     return state.tabsOrder.map((tab) {
       switch (tab) {
         case MobileSpaceTabType.recent:
           return const MobileRecentSpace();
+          
         case MobileSpaceTabType.spaces:
+          // 仅服务器工作区显示AI浮动按钮
           final showAIFloatingButton =
               widget.userProfile.workspaceType == WorkspaceTypePB.ServerW;
           return Stack(
             children: [
               MobileHomeSpace(userProfile: widget.userProfile),
+              // AI聊天浮动按钮
               if (showAIFloatingButton)
                 Positioned(
                   right: 20,
@@ -177,8 +219,10 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
                 ),
             ],
           );
+          
         case MobileSpaceTabType.favorites:
           return MobileFavoriteSpace(userProfile: widget.userProfile);
+          
         case MobileSpaceTabType.shared:
           final workspaceId = context
               .read<UserWorkspaceBloc>()
@@ -195,22 +239,31 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     }).toList();
   }
 
-  // quick create new page when clicking the add button in navigation bar
+  /// 快速创建新文档
+  /// 响应导航栏的添加按钮点击
   void _createNewDocument() => _createNewPage(ViewLayoutPB.Document);
 
+  /// 快速创建新AI聊天
   void _createNewAIChat() => _createNewPage(ViewLayoutPB.Chat);
 
+  /// 创建新页面的通用方法
+  /// 
+  /// 功能说明：
+  /// 1. 优先在空间中创建
+  /// 2. 如果没有空间，在侧边栏部分创建（仅支持文档）
+  /// 3. 创建后自动打开新页面
   void _createNewPage(ViewLayoutPB layout) {
     if (context.read<SpaceBloc>().state.spaces.isNotEmpty) {
+      // 在空间中创建页面
       context.read<SpaceBloc>().add(
             SpaceEvent.createPage(
               name: '',
               layout: layout,
-              openAfterCreate: true,
+              openAfterCreate: true,  // 创建后自动打开
             ),
           );
     } else if (layout == ViewLayoutPB.Document) {
-      // only support create document in section
+      // 只有文档类型支持在部分中创建
       context.read<SidebarSectionsBloc>().add(
             SidebarSectionsEvent.createRootViewInSection(
               name: '',
@@ -221,12 +274,16 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     }
   }
 
+  /// 离开当前工作区
+  /// 
+  /// 处理用户离开工作区的请求
   void _leaveWorkspace() {
     final workspaceId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
     if (workspaceId == null) {
       return Log.error('Workspace ID is null');
     }
+    // 发送离开工作区事件
     context
         .read<UserWorkspaceBloc>()
         .add(UserWorkspaceEvent.leaveWorkspace(workspaceId: workspaceId));

@@ -20,33 +20,50 @@ import 'package:go_router/go_router.dart';
 
 import 'setting/settings_popup_menu.dart';
 
+/// 移动端主页头部组件
+/// 
+/// 功能说明：
+/// 1. 显示用户或工作区信息
+/// 2. 提供设置菜单入口
+/// 3. 根据工作区类型自动切换显示模式
+/// 
+/// 显示模式：
+/// - 个人工作区：显示用户信息
+/// - 协作工作区：显示工作区信息
 class MobileHomePageHeader extends StatelessWidget {
   const MobileHomePageHeader({
     super.key,
     required this.userProfile,
   });
 
+  /// 用户信息
   final UserProfilePB userProfile;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
+      // 创建设置用户视图的BLoC
       create: (context) => getIt<SettingsUserViewBloc>(param1: userProfile)
         ..add(const SettingsUserEvent.initial()),
       child: BlocBuilder<SettingsUserViewBloc, SettingsUserState>(
         builder: (context, state) {
+          // 判断是否为协作工作区
           final isCollaborativeWorkspace =
               context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+          
           return ConstrainedBox(
+            // 设置最小高度，确保头部有足够的点击区域
             constraints: const BoxConstraints(minHeight: 56),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Expanded(
+                  // 根据工作区类型显示不同内容
                   child: isCollaborativeWorkspace
                       ? _MobileWorkspace(userProfile: userProfile)
                       : _MobileUser(userProfile: userProfile),
                 ),
+                // 设置菜单按钮
                 HomePageSettingsPopupMenu(
                   userProfile: userProfile,
                 ),
@@ -60,6 +77,10 @@ class MobileHomePageHeader extends StatelessWidget {
   }
 }
 
+/// 移动端用户信息显示组件
+/// 
+/// 在个人工作区模式下显示
+/// 包含用户头像、应用名称和用户邮箱/名称
 class _MobileUser extends StatelessWidget {
   const _MobileUser({
     required this.userProfile,
@@ -72,14 +93,17 @@ class _MobileUser extends StatelessWidget {
     final userIcon = userProfile.iconUrl;
     return Row(
       children: [
+        // 用户头像
         _UserIcon(userIcon: userIcon),
         const HSpace(12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 应用名称
               const FlowyText.medium('AppFlowy', fontSize: 18),
               const VSpace(4),
+              // 用户信息：优先显示邮箱，如果没有则显示名称
               FlowyText.regular(
                 userProfile.email.isNotEmpty
                     ? userProfile.email
@@ -96,6 +120,10 @@ class _MobileUser extends StatelessWidget {
   }
 }
 
+/// 移动端工作区信息显示组件
+/// 
+/// 在协作工作区模式下显示
+/// 包含工作区图标、名称和工作区切换按钮
 class _MobileWorkspace extends StatelessWidget {
   const _MobileWorkspace({
     required this.userProfile,

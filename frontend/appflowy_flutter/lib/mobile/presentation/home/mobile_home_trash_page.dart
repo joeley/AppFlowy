@@ -11,14 +11,27 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:go_router/go_router.dart';
 
+/// 移动端垃圾桶页面
+/// 
+/// 功能说明：
+/// 1. 显示已删除的文档和页面
+/// 2. 支持恢复和永久删除操作
+/// 3. 提供批量操作功能
+/// 4. 显示删除时间和状态
+/// 
+/// 操作模式：
+/// - 单项操作：滑动显示恢复/删除按钮
+/// - 批量操作：通过更多菜单恢复/清空所有项目
 class MobileHomeTrashPage extends StatelessWidget {
   const MobileHomeTrashPage({super.key});
 
+  /// 路由名称常量
   static const routeName = '/trash';
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
+      // 创建垃圾桶BLoC并初始化
       create: (context) => getIt<TrashBloc>()..add(const TrashEvent.initial()),
       child: BlocBuilder<TrashBloc, TrashState>(
         builder: (context, state) {
@@ -26,6 +39,7 @@ class MobileHomeTrashPage extends StatelessWidget {
             appBar: AppBar(
               title: Text(LocaleKeys.trash_text.tr()),
               actions: [
+                // 仅在有垃圾项目时显示更多菜单
                 state.objects.isEmpty
                     ? const SizedBox.shrink()
                     : IconButton(
@@ -33,6 +47,7 @@ class MobileHomeTrashPage extends StatelessWidget {
                         icon: const Icon(Icons.more_horiz),
                         onPressed: () {
                           final trashBloc = context.read<TrashBloc>();
+                          // 显示批量操作底部弹出菜单
                           showMobileBottomSheet(
                             context,
                             showHeader: true,
@@ -42,6 +57,7 @@ class MobileHomeTrashPage extends StatelessWidget {
                             title: LocaleKeys.trash_mobile_actions.tr(),
                             builder: (_) => Row(
                               children: [
+                                // 恢复所有按钮
                                 Expanded(
                                   child: _TrashActionAllButton(
                                     trashBloc: trashBloc,
